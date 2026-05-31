@@ -22,5 +22,8 @@ class DatabaseSeeder extends Seeder
 
         //ProductSeeder là file riêng — Laravel không tự chạy nó nếu bạn không gọi.
         $this->call(ProductSeeder::class);
+
+        //Biến thể sản phẩm: màu sắc, bộ nhớ, cấu hình, ...
+        $this->call(ProductVariantSeeder::class);
     }
 }

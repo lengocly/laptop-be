@@ -17,4 +17,11 @@ class Product extends Model
     {
         return $this->belongsTo(Category::class);
     }
+
+    //Nói với Laravel: mỗi sản phẩm có nhiều biến thể, Đọc biến thể từ SP đã có 
+    public function variants()
+    {
+        return $this->hasMany(ProductVariant::class)->where('is_active', true)->orderBy('sort_order');
+        // sắp xếp danh sách biến thể theo cột sort_order.
+    }
 }

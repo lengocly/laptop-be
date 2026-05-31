@@ -10,21 +10,36 @@ use Illuminate\Validation\Rules\Password;
 
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
     public function register(Request $request)
     {
-        $validated = $request->validate([
-            // Bắt buộc, chuỗi, tối đa 255 ký tự
-            'name' => ['required', 'string', 'max:255'],
-
-            //Email hợp lệ, chưa có trong bảng users
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
-
-            //Bắt buộc; phải có password_confirmation trùng; tối thiểu 6 ký tự
-            'password' => ['required', 'confirmed', Password::min(6)],
+        // Chuẩn hóa trước khi validate
+        $request->merge([
+            'name' => trim($request->name ?? ''), // xóa khoảng trắng ở đầu và cuối
+            'email' => Str::lower(trim($request->email ?? '')), // chuyển email thành chữ thường
         ]);
+
+        $validated = $request->validate([
+            // Bắt buộc, chuỗi, tối thiểu 2 ký tự, tối đa 100 ký tự
+            'name' => ['required', 'string', 'min:2', 'max:100'],
+
+            //Email hợp lệ, chưa có trong bảng users, tối đa 100 ký tự 
+            'email' => ['required', 'string', 'email:rfc,dns', 'max:100', 'unique:users,email'],
+
+            //Bắt buộc; phải có password_confirmation trùng; tối thiểu 8 ký tự, ít nhất 1 chữ cái, 1 số
+            'password' => ['required', 'confirmed',Password::min(8)->letters()->numbers(),
+            ],
+        ], [
+            'name.min' => 'Họ tên phải có ít nhất 2 ký tự.',
+            'name.regex' => 'Họ tên không được để trống.',
+            'email.email' => 'Email không hợp lệ.',
+            'email.unique' => 'Email này đã được đăng ký.',
+            'password.min' => 'Mật khẩu phải có ít nhất 8 ký tự.',
+        ]);
+        
 
         $user = User::create([
             'name' => $validated['name'],
@@ -42,9 +57,15 @@ class AuthController extends Controller
 
     public function login(Request $request)
     {
+        // Chuẩn hóa trước khi validate
+        $request->merge([
+            'email' => Str::lower(trim($request->email ?? '')),
+        ]);
+
+        // validate email và password
         $credentials = $request->validate([
             'email' => ['required', 'email'],
-            'password' => ['required', 'string'],
+            'password' => ['required', 'string', 'min:8'],
         ]);
 
         //Tìm user theo email
