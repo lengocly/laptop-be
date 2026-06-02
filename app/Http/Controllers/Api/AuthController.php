@@ -103,6 +103,14 @@ class AuthController extends Controller
     //Lấy thông tin user đang đăng nhập
     public function user(Request $request)
     {
-        return response()->json($request->user());
+        $user = $request->user();
+
+        return response()->json([
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'is_admin' => (bool) $user->is_admin, 
+            //FE biết user có phải admin không để hiện menu và chặn route.
+        ]);
     }
 }

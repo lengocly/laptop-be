@@ -116,6 +116,7 @@ class OrderController extends Controller
                 'full_name',
                 'phone',
                 'address',
+                'note',
                 'created_at',
             ]);
 

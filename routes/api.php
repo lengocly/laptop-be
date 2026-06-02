@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\PaymentController;
+use App\Http\Controllers\Api\AdminOrderController;
 
 //Gom các route API vào nhóm chung, mọi URL trong nhóm đều có thêm /v1 phía trước
 Route::prefix('v1')->group(function () {
@@ -31,6 +32,8 @@ Route::prefix('v1')->group(function () {
 
     //Lấy thông tin user đang đăng nhập, đăng xuất
     Route::middleware('auth:sanctum')->group(function () {
+
+      
       Route::get('/user', [AuthController::class, 'user']);
       Route::post('/logout', [AuthController::class, 'logout']);
       
@@ -46,6 +49,14 @@ Route::prefix('v1')->group(function () {
 
       //Frontend gọi route này sau khi thanh toán thành công để backend kiểm tra lại với Stripe rồi cập nhật đơn
       Route::post('/payment/confirm', [PaymentController::class, 'confirmPaid']); 
+
+      // ===== ADMIN =====
+      Route::middleware('admin')->prefix('admin')->group(function () {
+        //Admin xem danh sách đơn hàng
+          Route::get('/orders', [AdminOrderController::class, 'index']);
+          //Admin đổi trạng thái giao hàng
+          Route::patch('/orders/{order}/status', [AdminOrderController::class, 'updateStatus']);
+      });
     });
 
     // webhook Stripe

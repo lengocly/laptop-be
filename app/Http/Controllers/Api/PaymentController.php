@@ -12,6 +12,7 @@ use Stripe\Stripe;
 //khi frontend bấm “Thanh toán”, frontend sẽ gọi route này để tạo phiên thanh toán Stripe cho đơn hàng. File PaymentController.php này sẽ nhận dữ liệu đó, tạo phiên thanh toán Stripe, rồi trả kết quả về frontend.
 class PaymentController extends Controller
 {
+    // tạo phiên thanh toán Stripe cho đơn hàng
     public function createIntent(Request $request)
     {
         $validated = $request->validate([
@@ -89,33 +90,40 @@ class PaymentController extends Controller
     // sau khi thanh toán thành công để backend kiểm tra lại với Stripe rồi cập nhật đơn
     public function confirmPaid(Request $request)
     {
+        // kiểm tra dữ liệu nhận được
         $validated = $request->validate([
             'order_id' => ['required', 'integer'],
             'payment_intent_id' => ['required', 'string'],
         ]);
 
+        // lấy đơn hàng
         $order = Order::where('id', $validated['order_id'])
             ->where('user_id', $request->user()->id)
             ->firstOrFail();
 
+        // cấu hình Stripe
         Stripe::setApiKey(config('services.stripe.secret'));
 
+        // lấy phiên thanh toán Stripe
         $intent = PaymentIntent::retrieve($validated['payment_intent_id']);
 
+        // lấy mã đơn hàng từ metadata
         $metadataOrderId = $intent->metadata->order_id ?? null;
 
+        // kiểm tra phiên thanh toán Stripe có hợp lệ không
         $isValidIntent =
             $intent->status === 'succeeded'
             && (int) $metadataOrderId === (int) $order->id
             && (int) $intent->amount === (int) $order->subtotal;
 
         if ($isValidIntent) {
+            // cập nhật đơn hàng
             $order->update([
                 'stripe_payment_intent_id' => $intent->id,
-                'payment_status' => 'paid',
-                'status' => 'paid',
+                'payment_status' => 'paid'
             ]);
 
+            // trả kết quả về frontend
             return response()->json([
                 'message' => 'Thanh toán thành công',
                 'order_id' => $order->id,
@@ -125,6 +133,7 @@ class PaymentController extends Controller
             ]);
         }
 
+        // trả lỗi về frontend
         return response()->json([
             'message' => 'Thanh toán chưa thành công',
             'stripe_status' => $intent->status,
@@ -138,6 +147,7 @@ class PaymentController extends Controller
     // Stripe gọi route này tự động khi có sự kiện thanh toán. Route này không đặt trong auth:sanctum, vì Stripe không đăng nhập tài khoản user của web bạn.
     public function webhook(Request $request)
     {
+        // trả kết quả về frontend
         return response()->json([
             'received' => true,
         ]);

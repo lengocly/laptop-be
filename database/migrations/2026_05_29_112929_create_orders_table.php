@@ -28,9 +28,9 @@ return new class extends Migration
             $table->unsignedBigInteger('subtotal')->default(0); //unsignedBigInteger vì tiền không âm và có thể là số lớn
 
             // trạng thái đơn hàng
-            $table->enum('status', ['pending', 'paid', 'cancelled'])
-                ->default('pending');
-                //khi khách vừa đặt hàng, trạng thái mặc định là đang chờ xử lý.
+            $table->enum('status', ['pending', 'processing', 'shipping', 'delivered', 'cancelled'])
+            ->default('pending');
+            //khi khách vừa đặt hàng, trạng thái mặc định là chờ xử lý.
 
             $table->timestamps();
         });
