@@ -13,6 +13,7 @@ class Order extends Model
         'phone',
         'address',
         'note',
+        'admin_note',
         'subtotal',
         'status',
         'order_code',

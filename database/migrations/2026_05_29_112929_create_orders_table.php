@@ -23,6 +23,7 @@ return new class extends Migration
             $table->string('phone', 20);
             $table->text('address');
             $table->text('note')->nullable();
+            $table->text('admin_note')->nullable(); //ghi chú của admin
 
             // tổng tiền đơn hàng
             $table->unsignedBigInteger('subtotal')->default(0); //unsignedBigInteger vì tiền không âm và có thể là số lớn

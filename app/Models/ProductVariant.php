@@ -8,9 +8,16 @@ use Illuminate\Database\Eloquent\Model;
 class ProductVariant extends Model
 {
     protected $fillable = [
-        'product_id', 'group_key', 'group_label', 'option_label', 'sku',
-        'price_display', 'price_original', 'stock', 'image_main',
-        'sort_order', 'is_active',
+        'product_id',
+        'group_key',
+        'group_label',
+        'option_label',
+        'sku',
+        'price_display', //giá hiển thị
+        'price_original', //giá gốc
+        'stock', //số lượng
+        'sort_order', //thứ tự
+        'is_active', //trạng thái
     ];
 
     public function product()

@@ -122,4 +122,27 @@ class OrderController extends Controller
 
         return response()->json($orders);
     }
+
+    // Khách hủy đơn (chỉ khi admin chưa xác nhận)
+    public function cancel(Request $request, Order $order)
+    {
+        // Chỉ đơn của chính user
+        if ($order->user_id !== $request->user()->id) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        // Chỉ hủy được khi còn "Chờ xử lý"
+        if ($order->status !== 'pending') {
+            return response()->json([
+                'message' => 'Đơn hàng đã được xác nhận, không thể hủy.',
+            ], 422);
+        }
+
+        $order->update(['status' => 'cancelled']);
+
+        return response()->json([
+            'message' => 'Đã hủy đơn hàng thành công.',
+            'order' => $order->fresh()->load('items'),
+        ]);
+    }
 }
