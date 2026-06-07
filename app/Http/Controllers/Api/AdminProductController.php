@@ -40,8 +40,12 @@ class AdminProductController extends Controller
             $query->where('is_active', $request->boolean('is_active'));
         }
 
-        //lấy danh sách sản phẩm
-        return response()->json($query->latest()->get());
+        // Phân trang — mặc định 10 SP/trang, tối đa 50
+        $perPage = min(max((int) $request->input('per_page', 10), 1), 50);
+
+        return response()->json(
+            $query->latest()->paginate($perPage)
+        );
     }
 
     // Chi tiết sản phẩm để sửa

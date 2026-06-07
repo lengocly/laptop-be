@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Order;
+use App\Services\VoucherService;
 use Illuminate\Support\Facades\DB;
 
 //API Controller xử lý đặt hàng trong Laravel.
@@ -12,6 +13,8 @@ use Illuminate\Support\Facades\DB;
 
 class OrderController extends Controller
 {
+    public function __construct(private VoucherService $voucherService) {}
+
     //đặt hàng
     public function store(Request $request)
     {
@@ -22,6 +25,10 @@ class OrderController extends Controller
             'note' => ['nullable', 'string'],
             //phương thức thanh toán
             'payment_method' => ['required', 'in:cod,stripe'],
+
+            // Voucher tuỳ chọn — gửi voucher_id hoặc voucher_code
+            'voucher_id' => ['nullable', 'integer'],
+            'voucher_code' => ['nullable', 'string'],
 
             //items, phải là mảng, và ít nhất có 1 sản phẩm
             'items' => ['required', 'array', 'min:1'],
@@ -35,25 +42,33 @@ class OrderController extends Controller
 
         //DB::transaction() nghĩa là: tất cả thao tác bên trong phải thành công hết thì mới lưu vào database.
         $order = DB::transaction(function () use ($request, $validated) {
-            $subtotal = 0;
+            $itemsSubtotal = 0;
 
-            //Tính tổng tiền đơn hàng (Ví dụ:
-                // Casio 580: 650000 x 1 = 650000
-                // Casio 570: 450000 x 2 = 900000
-                // Tổng:
-                // subtotal = 1.550.000)
+            //Tính tổng tiền hàng (trước voucher)
             foreach ($validated['items'] as $item) {
-                $subtotal += $item['price'] * $item['quantity'];
+                $itemsSubtotal += $item['price'] * $item['quantity'];
             }
 
+            // Kiểm tra và tính giảm giá voucher (nếu có)
+            $voucherResult = $this->voucherService->resolveForCheckout(
+                $request->user()->id,
+                $itemsSubtotal,
+                $validated['voucher_id'] ?? null,
+                $validated['voucher_code'] ?? null,
+            );
+
+            $voucher = $voucherResult['voucher'];
+            $userVoucher = $voucherResult['user_voucher'];
+            $voucherDiscount = $voucherResult['discount'];
+
+            // Tổng thanh toán = tiền hàng - giảm voucher
+            $finalSubtotal = $itemsSubtotal - $voucherDiscount;
+
             //tạo mã đơn hàng
-                // vd: ORD     = tiền tố đơn hàng
-                // 2605    = năm + tháng hiện tại
-                // 00001   = số thứ tự đơn trong tháng đó
             $orderCode = 'ORD-' . now()->format('ym') . '-' . str_pad(
                 Order::whereYear('created_at', now()->year)
                     ->whereMonth('created_at', now()->month)
-                    ->count() + 1, //(Nếu tháng này đã có 7 đơn, đơn mới sẽ là đơn thứ 8)
+                    ->count() + 1,
                 5, '0', STR_PAD_LEFT
             );
 
@@ -64,17 +79,17 @@ class OrderController extends Controller
                 'phone' => $validated['phone'],
                 'address' => $validated['address'],
                 'note' => $validated['note'] ?? null,
-                'subtotal' => $subtotal,
+                'subtotal' => $finalSubtotal,
+                'voucher_id' => $voucher?->id,
+                'voucher_discount' => $voucherDiscount,
                 'status' => 'pending',
                 'order_code' => $orderCode,
                 'payment_method' => $validated['payment_method'],
                 'payment_status' => 'unpaid',
-                'status' => 'pending',
             ]);
 
             //Tạo chi tiết sản phẩm trong bảng order_items
             foreach ($validated['items'] as $item) {
-                //tạo sản phẩm con thuộc về đơn hàng này
                 $order->items()->create([
                     'product_id' => $item['product_id'],
                     'product_variant_id' => $item['product_variant_id'] ?? null,
@@ -86,6 +101,12 @@ class OrderController extends Controller
                 ]);
             }
 
+            // Đánh dấu voucher đã dùng
+            if ($voucher && $userVoucher) {
+                $userVoucher->update(['used_at' => now()]);
+                $voucher->increment('used_count');
+            }
+
             return $order;
         });
 
@@ -95,6 +116,7 @@ class OrderController extends Controller
             'order_code' => $order->order_code,
             'payment_method' => $order->payment_method,
             'subtotal' => $order->subtotal,
+            'voucher_discount' => $order->voucher_discount,
             'message' => 'Đặt hàng thành công',
         ], 201);
     }
@@ -110,6 +132,8 @@ class OrderController extends Controller
                 'id',
                 'order_code',
                 'subtotal',
+                'voucher_id',
+                'voucher_discount',
                 'payment_method',
                 'payment_status',
                 'status',

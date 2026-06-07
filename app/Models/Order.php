@@ -15,6 +15,8 @@ class Order extends Model
         'note',
         'admin_note',
         'subtotal',
+        'voucher_id',
+        'voucher_discount',
         'status',
         'order_code',
         'payment_method',
@@ -30,5 +32,10 @@ class Order extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function voucher()
+    {
+        return $this->belongsTo(Voucher::class);
     }
 }

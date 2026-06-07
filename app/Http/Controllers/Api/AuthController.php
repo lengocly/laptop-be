@@ -103,14 +103,85 @@ class AuthController extends Controller
     //Lấy thông tin user đang đăng nhập
     public function user(Request $request)
     {
+        return response()->json($this->formatUser($request->user()));
+    }
+
+    //Cập nhật thông tin tài khoản
+    public function updateProfile(Request $request)
+    {
         $user = $request->user();
 
+        $request->merge([
+            'name' => trim($request->name ?? ''),
+            'email' => Str::lower(trim($request->email ?? '')),
+        ]);
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'min:2', 'max:100'],
+            'email' => ['required', 'string', 'email:rfc,dns', 'max:100', 'unique:users,email,'.$user->id],
+        ], [
+            'name.min' => 'Họ tên phải có ít nhất 2 ký tự.',
+            'email.email' => 'Email không hợp lệ.',
+            'email.unique' => 'Email này đã được sử dụng.',
+        ]);
+
+        $emailChanged = $user->email !== $validated['email'];
+
+        $user->name = $validated['name'];
+        $user->email = $validated['email'];
+
+        if ($emailChanged) {
+            $user->email_verified_at = null;
+        }
+
+        $user->save();
+
+        if ($emailChanged) {
+            $user->sendEmailVerificationNotification();
+        }
+
         return response()->json([
+            'message' => $emailChanged
+                ? 'Cập nhật thành công. Vui lòng xác thực email mới.'
+                : 'Cập nhật thông tin thành công.',
+            'user' => $this->formatUser($user->fresh()),
+        ]);
+    }
+
+    //Đổi mật khẩu
+    public function updatePassword(Request $request)
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'current_password' => ['required', 'string'],
+            'password' => ['required', 'confirmed', Password::min(8)->letters()->numbers()],
+        ], [
+            'password.min' => 'Mật khẩu phải có ít nhất 8 ký tự.',
+        ]);
+
+        if (! Hash::check($validated['current_password'], $user->password)) {
+            throw ValidationException::withMessages([
+                'current_password' => ['Mật khẩu hiện tại không đúng.'],
+            ]);
+        }
+
+        $user->password = $validated['password'];
+        $user->save();
+
+        return response()->json([
+            'message' => 'Đổi mật khẩu thành công.',
+        ]);
+    }
+
+    private function formatUser(User $user): array
+    {
+        return [
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
-            'is_admin' => (bool) $user->is_admin, 
-            //FE biết user có phải admin không để hiện menu và chặn route.
-        ]);
+            'is_admin' => (bool) $user->is_admin,
+            'email_verified_at' => $user->email_verified_at,
+        ];
     }
 }
