@@ -5,7 +5,12 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Order;
+use App\Models\Product;
+use App\Models\ProductVariant;
+use App\Services\OrderStockService;
 use App\Services\VoucherService;
+use App\Support\PriceHelper;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\DB;
 
 //API Controller xử lý đặt hàng trong Laravel.
@@ -13,7 +18,10 @@ use Illuminate\Support\Facades\DB;
 
 class OrderController extends Controller
 {
-    public function __construct(private VoucherService $voucherService) {}
+    public function __construct(
+        private VoucherService $voucherService,
+        private OrderStockService $orderStockService,
+    ) {}
 
     //đặt hàng
     public function store(Request $request)
@@ -44,9 +52,10 @@ class OrderController extends Controller
         $order = DB::transaction(function () use ($request, $validated) {
             $itemsSubtotal = 0;
 
-            //Tính tổng tiền hàng (trước voucher)
+            // Tính tổng tiền hàng (trước voucher) — giá lấy từ DB, không tin client
             foreach ($validated['items'] as $item) {
-                $itemsSubtotal += $item['price'] * $item['quantity'];
+                $unitPrice = $this->resolveUnitPrice($item);
+                $itemsSubtotal += $unitPrice * $item['quantity'];
             }
 
             // Kiểm tra và tính giảm giá voucher (nếu có)
@@ -64,13 +73,12 @@ class OrderController extends Controller
             // Tổng thanh toán = tiền hàng - giảm voucher
             $finalSubtotal = $itemsSubtotal - $voucherDiscount;
 
-            //tạo mã đơn hàng
-            $orderCode = 'ORD-' . now()->format('ym') . '-' . str_pad(
-                Order::whereYear('created_at', now()->year)
-                    ->whereMonth('created_at', now()->month)
-                    ->count() + 1,
-                5, '0', STR_PAD_LEFT
-            );
+            // Kiểm tra và trừ tồn kho trước khi tạo đơn
+            foreach ($validated['items'] as $item) {
+                $this->reserveStockForItem($item);
+            }
+
+            $orderCode = $this->generateOrderCode();
 
             //Tạo đơn hàng mới trong bảng orders
             $order = Order::create([
@@ -90,22 +98,19 @@ class OrderController extends Controller
 
             //Tạo chi tiết sản phẩm trong bảng order_items
             foreach ($validated['items'] as $item) {
+                $unitPrice = $this->resolveUnitPrice($item);
                 $order->items()->create([
                     'product_id' => $item['product_id'],
                     'product_variant_id' => $item['product_variant_id'] ?? null,
                     'product_name' => $item['product_name'],
                     'option_label' => $item['option_label'] ?? null,
-                    'price' => $item['price'],
+                    'price' => $unitPrice,
                     'quantity' => $item['quantity'],
-                    'line_total' => $item['price'] * $item['quantity'],
+                    'line_total' => $unitPrice * $item['quantity'],
                 ]);
             }
 
-            // Đánh dấu voucher đã dùng
-            if ($voucher && $userVoucher) {
-                $userVoucher->update(['used_at' => now()]);
-                $voucher->increment('used_count');
-            }
+            // Voucher chỉ đánh dấu đã dùng sau khi thanh toán thành công (confirmPaid/webhook)
 
             return $order;
         });
@@ -162,11 +167,139 @@ class OrderController extends Controller
             ], 422);
         }
 
-        $order->update(['status' => 'cancelled']);
+        // Không cho hủy đơn đã trả tiền — tránh mất tiền không hoàn lại
+        if ($order->payment_status === 'paid') {
+            return response()->json([
+                'message' => 'Đơn đã thanh toán, không thể hủy.',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($order) {
+            $order->update(['status' => 'cancelled']);
+            $this->orderStockService->releaseForOrder($order);
+            $this->voucherService->releaseForOrder($order);
+        });
 
         return response()->json([
             'message' => 'Đã hủy đơn hàng thành công.',
             'order' => $order->fresh()->load('items'),
         ]);
+    }
+
+    private function generateOrderCode(): string
+    {
+        $prefix = 'ORD-' . now()->format('ym') . '-';
+
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $sequence = Order::whereYear('created_at', now()->year)
+                ->whereMonth('created_at', now()->month)
+                ->lockForUpdate()
+                ->count() + 1 + $attempt;
+
+            $code = $prefix . str_pad((string) $sequence, 5, '0', STR_PAD_LEFT);
+
+            if (!Order::where('order_code', $code)->exists()) {
+                return $code;
+            }
+        }
+
+        return $prefix . strtoupper(substr(uniqid(), -5));
+    }
+
+    /** Giá đơn vị chuẩn từ DB — từ chối nếu client gửi sai. */
+    private function resolveUnitPrice(array $item): int
+    {
+        $product = Product::find($item['product_id']);
+
+        if (!$product || !$product->is_active) {
+            $this->failStock('Sản phẩm "' . $item['product_name'] . '" không còn khả dụng.');
+        }
+
+        $hasVariants = $product->variants()->exists();
+        $variantId = $item['product_variant_id'] ?? null;
+
+        if ($hasVariants && !$variantId) {
+            $this->failStock('Vui lòng chọn cấu hình cho sản phẩm "' . $item['product_name'] . '".');
+        }
+
+        if ($variantId) {
+            $variant = ProductVariant::where('product_id', $product->id)
+                ->where('id', $variantId)
+                ->where('is_active', true)
+                ->first();
+
+            if (!$variant) {
+                $this->failStock('Biến thể sản phẩm không hợp lệ hoặc đã ngừng bán.');
+            }
+
+            $expected = PriceHelper::parseDisplay($variant->price_display ?? $product->price_display);
+        } else {
+            $expected = PriceHelper::parseDisplay($product->price_display);
+        }
+
+        if ($expected <= 0) {
+            $this->failStock('Không xác định được giá sản phẩm "' . $item['product_name'] . '".');
+        }
+
+        if ((int) $item['price'] !== $expected) {
+            $this->failStock('Giá sản phẩm "' . $item['product_name'] . '" đã thay đổi. Vui lòng tải lại trang.');
+        }
+
+        return $expected;
+    }
+
+    /**
+     * Khóa và trừ tồn kho cho một dòng hàng.
+     * Có biến thể → trừ product_variants.stock; không → trừ products.stock.
+     */
+    private function reserveStockForItem(array $item): void
+    {
+        $product = Product::lockForUpdate()->find($item['product_id']);
+
+        if (!$product || !$product->is_active) {
+            $this->failStock('Sản phẩm "' . $item['product_name'] . '" không còn khả dụng.');
+        }
+
+        $variantId = $item['product_variant_id'] ?? null;
+
+        if ($product->variants()->exists() && !$variantId) {
+            $this->failStock('Vui lòng chọn cấu hình cho sản phẩm "' . $item['product_name'] . '".');
+        }
+
+        if ($variantId) {
+            $variant = ProductVariant::lockForUpdate()
+                ->where('product_id', $product->id)
+                ->where('id', $variantId)
+                ->first();
+
+            if (!$variant || !$variant->is_active) {
+                $this->failStock('Biến thể sản phẩm không hợp lệ hoặc đã ngừng bán.');
+            }
+
+            if ($variant->stock < $item['quantity']) {
+                $this->failStock(
+                    'Sản phẩm "' . $item['product_name'] . '" chỉ còn ' . $variant->stock . ' sản phẩm.'
+                );
+            }
+
+            $variant->decrement('stock', $item['quantity']);
+
+            return;
+        }
+
+        if ($product->stock < $item['quantity']) {
+            $this->failStock(
+                'Sản phẩm "' . $item['product_name'] . '" chỉ còn ' . $product->stock . ' sản phẩm.'
+            );
+        }
+
+        $product->decrement('stock', $item['quantity']);
+    }
+
+    private function failStock(string $message): void
+    {
+        throw new HttpResponseException(response()->json([
+            'message' => $message,
+        ], 422));
     }
 }

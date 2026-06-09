@@ -13,7 +13,7 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
 // Fillable: chỉ những cột này được phép mass assignment (User::create($data)) → tránh lỗi MassAssignmentException
-#[Fillable(['name', 'email', 'password', 'is_admin'])]
+#[Fillable(['name', 'email', 'password'])]
 
 // Hidden: những cột này sẽ không xuất ra JSON khi trả về API (password, remember_token).
 #[Hidden(['password', 'remember_token'])]

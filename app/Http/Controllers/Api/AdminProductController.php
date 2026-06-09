@@ -227,7 +227,7 @@ class AdminProductController extends Controller
     public function uploadImage(Request $request)
     {
         $request->validate([
-            'image' => ['required', 'image', 'max:5120'], // tối đa ~5MB
+            'image' => ['required', 'file', 'mimes:jpeg,png,webp,jpg', 'max:5120'], // tối đa ~5MB
         ]);
 
         // Lưu vào storage/app/public/products/

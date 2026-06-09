@@ -17,7 +17,7 @@ class AdminUserSeeder extends Seeder
             ['email' => 'admin@betatech.com'],
             [
                 'name' => 'BetaTech Admin',
-                'password' => Hash::make('Admin123456'),
+                'password' => Hash::make(env('ADMIN_PASSWORD', 'Admin123456')),
                 'email_verified_at' => now(),
                 'is_admin' => true,
             ]

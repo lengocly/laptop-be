@@ -19,6 +19,11 @@ class VoucherController extends Controller
         $userId = $request->user('sanctum')?->id;
 
         $vouchers = Voucher::query()
+            ->with(['userVouchers' => function ($q) use ($userId) {
+                if ($userId) {
+                    $q->where('user_id', $userId)->whereNull('used_at');
+                }
+            }])
             ->where('is_active', true)
             ->where('expires_at', '>', now())
             ->where(function ($q) {
@@ -100,8 +105,8 @@ class VoucherController extends Controller
     {
         $validated = $request->validate([
             'subtotal' => ['required', 'integer', 'min:0'],
-            'voucher_id' => ['nullable', 'integer'],
-            'voucher_code' => ['nullable', 'string'],
+            'voucher_id' => ['nullable', 'integer', 'required_without:voucher_code'],
+            'voucher_code' => ['nullable', 'string', 'required_without:voucher_id'],
         ]);
 
         $result = $this->voucherService->resolveForCheckout(

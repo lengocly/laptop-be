@@ -10,10 +10,18 @@ use Illuminate\Http\Request;
 use App\Models\Order;
 
 use App\Mail\OrderInvoiceMail;
+use App\Services\OrderStockService;
+use App\Services\VoucherService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 
 class AdminOrderController extends Controller
 {
+    public function __construct(
+        private OrderStockService $orderStockService,
+        private VoucherService $voucherService,
+    ) {}
+
      // Danh sách tất cả đơn
      public function index()
      {
@@ -47,11 +55,18 @@ class AdminOrderController extends Controller
             //Tự động thu tiền
             $data['payment_status'] = 'paid';
         }
-        // Đã hủy → không auto paid
+
+        // Hủy đơn → hoàn kho + voucher trong transaction
         if ($validated['status'] === 'cancelled') {
-            // giữ payment_status như cũ
+            DB::transaction(function () use ($order, $data) {
+                $order->update($data);
+                $this->orderStockService->releaseForOrder($order);
+                $this->voucherService->releaseForOrder($order);
+            });
+        } else {
+            $order->update($data);
         }
-        $order->update($data);
+
         return response()->json([
             'message' => 'Cập nhật trạng thái đơn hàng thành công',
             'order' => $order->fresh()->load(['items', 'user:id,name,email']),
@@ -75,7 +90,11 @@ class AdminOrderController extends Controller
              ], 422);
          }
      
-         $order->update(['status' => 'cancelled']);
+         DB::transaction(function () use ($order) {
+             $order->update(['status' => 'cancelled']);
+             $this->orderStockService->releaseForOrder($order);
+             $this->voucherService->releaseForOrder($order);
+         });
      
          return response()->json([
              'message' => 'Đã hủy đơn hàng.',

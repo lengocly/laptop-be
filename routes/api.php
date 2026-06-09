@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\AdminProductController;
 use App\Http\Controllers\Api\AdminVoucherController;
 use App\Http\Controllers\Api\VoucherController;
 use App\Http\Controllers\Api\ReviewController;
+use App\Http\Controllers\Api\ChatController;
 
 //Gom các route API vào nhóm chung, mọi URL trong nhóm đều có thêm /v1 phía trước
 Route::prefix('v1')->group(function () {
@@ -18,6 +19,9 @@ Route::prefix('v1')->group(function () {
     Route::get('/ping', function () {
       return response()->json(['message' => 'API v1 OK']);
     });
+
+    // Chatbot AI — tối đa 20 tin/phút/IP
+    Route::middleware('throttle:20,1')->post('/chat', [ChatController::class, 'send']);
 
     Route::get('/categories', [CategoryController::class, 'index']);
 
@@ -35,10 +39,10 @@ Route::prefix('v1')->group(function () {
 
 
     //Controller xử lý — file AuthController.php
-    Route::post('/register', [AuthController::class, 'register']);
-
-    //Đăng nhập
-    Route::post('/login', [AuthController::class, 'login']);
+    Route::middleware('throttle:5,1')->group(function () {
+        Route::post('/register', [AuthController::class, 'register']);
+        Route::post('/login', [AuthController::class, 'login']);
+    });
 
     //Lấy thông tin user đang đăng nhập, đăng xuất
     Route::middleware('auth:sanctum')->group(function () {

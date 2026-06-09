@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Order;
 use App\Models\UserVoucher;
 use App\Models\Voucher;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -27,9 +28,10 @@ class VoucherService
             ];
         }
 
+        // Khóa voucher — tránh 2 đơn cùng dùng 1 mã voucher
         $voucher = $voucherId
-            ? Voucher::find($voucherId)
-            : Voucher::where('code', strtoupper(trim($voucherCode ?? '')))->first();
+            ? Voucher::lockForUpdate()->find($voucherId)
+            : Voucher::lockForUpdate()->where('code', strtoupper(trim($voucherCode ?? '')))->first();
 
         if (!$voucher) {
             $this->fail('Voucher không tồn tại.');
@@ -37,10 +39,11 @@ class VoucherService
 
         $this->assertVoucherUsable($voucher, $itemsSubtotal);
 
-        // User phải đã lưu voucher và chưa dùng
+        // Khóa bản ghi user_vouchers — tránh race condition lúc checkout
         $userVoucher = UserVoucher::where('user_id', $userId)
             ->where('voucher_id', $voucher->id)
             ->whereNull('used_at')
+            ->lockForUpdate()
             ->first();
 
         if (!$userVoucher) {
@@ -75,6 +78,51 @@ class VoucherService
                 'Đơn hàng tối thiểu '
                 . number_format($voucher->min_order_amount, 0, ',', '.') . 'đ để dùng voucher.'
             );
+        }
+    }
+
+    // Đánh dấu voucher đã dùng — gọi sau khi thanh toán thành công
+    public function markForOrder(Order $order): void
+    {
+        if (!$order->voucher_id) {
+            return;
+        }
+
+        $userVoucher = UserVoucher::where('user_id', $order->user_id)
+            ->where('voucher_id', $order->voucher_id)
+            ->whereNull('used_at')
+            ->lockForUpdate()
+            ->first();
+
+        if (!$userVoucher) {
+            return;
+        }
+
+        $userVoucher->update(['used_at' => now()]);
+        Voucher::where('id', $order->voucher_id)->increment('used_count');
+    }
+
+    // Hoàn voucher khi hủy đơn — chỉ khi đã đánh dấu used_at trước đó
+    public function releaseForOrder(Order $order): void
+    {
+        if (!$order->voucher_id) {
+            return;
+        }
+
+        $userVoucher = UserVoucher::where('user_id', $order->user_id)
+            ->where('voucher_id', $order->voucher_id)
+            ->whereNotNull('used_at')
+            ->first();
+
+        if ($userVoucher) {
+            $userVoucher->update(['used_at' => null]);
+        }
+
+        $voucher = Voucher::find($order->voucher_id);
+
+        // Giảm used_count nếu voucher đã được tính là đã dùng
+        if ($voucher && $voucher->used_count > 0 && $userVoucher) {
+            $voucher->decrement('used_count');
         }
     }
 
