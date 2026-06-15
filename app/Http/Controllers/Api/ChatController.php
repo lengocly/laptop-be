@@ -193,31 +193,70 @@ class ChatController extends Controller
     }
 
 
-    /** Câu user → từ khóa tìm tên SP */
+    /** Câu user → từ khóa tìm tên SP (cụm dài / phụ kiện ưu tiên trước "đi học") */
     private function searchKeywords(string $text): array
     {
         $t = mb_strtolower(trim($text));
 
         $map = [
-            'laptop gaming'     => ['gaming', 'razer'],
             'tìm laptop gaming' => ['gaming', 'razer'],
+            'laptop gaming'     => ['gaming', 'razer'],
             'laptop đi học'     => ['vivobook', 'ideapad', 'inspiron', 'slim'],
-            'đi học'            => ['vivobook', 'ideapad', 'inspiron', 'pavilion', 'slim'],
-            'sinh viên'         => ['vivobook', 'ideapad', 'inspiron'],
-            'văn phòng'         => ['vivobook', 'ideapad', 'inspiron'],
+            'bàn phím'          => ['bàn phím', 'keychron', 'k380'],
+            'ban phim'          => ['bàn phím', 'keychron', 'k380'],
             'tai nghe'          => ['tai nghe', 'sony', 'jbl'],
             'chuột'             => ['chuột', 'logitech', 'razer'],
-            'bàn phím'          => ['bàn phím', 'keychron'],
+            'chuot'             => ['chuột', 'logitech', 'razer'],
+            'sinh viên'         => ['vivobook', 'ideapad', 'inspiron'],
+            'văn phòng'         => ['vivobook', 'ideapad', 'inspiron'],
+            'đi học'            => ['vivobook', 'ideapad', 'inspiron', 'pavilion', 'slim'],
             'laptop'            => ['vivobook', 'macbook', 'inspiron', 'ideapad', 'pavilion'],
         ];
 
-        foreach ($map as $phrase => $keys) {
+        $phrases = array_keys($map);
+        usort($phrases, fn ($a, $b) => mb_strlen($b) <=> mb_strlen($a));
+
+        foreach ($phrases as $phrase) {
             if (str_contains($t, $phrase)) {
-                return $keys;
+                return $map[$phrase];
             }
         }
 
         return [];
+    }
+
+    /** Phụ kiện / laptop — lọc danh mục khi user nói rõ */
+    private function detectCategorySlug(string $text): ?string
+    {
+        $t = mb_strtolower(trim($text));
+
+        if (str_contains($t, 'bàn phím') || str_contains($t, 'ban phim')) {
+            return 'ban-phim';
+        }
+        if (str_contains($t, 'chuột') || str_contains($t, 'chuot')) {
+            return 'chuot';
+        }
+        if (str_contains($t, 'tai nghe')) {
+            return 'tai-nghe';
+        }
+        if (
+            str_contains($t, 'laptop')
+            || str_contains($t, 'macbook')
+            || (str_contains($t, 'đi học') && ! $this->mentionsAccessory($t))
+        ) {
+            return 'laptop';
+        }
+
+        return null;
+    }
+
+    private function mentionsAccessory(string $t): bool
+    {
+        return str_contains($t, 'bàn phím')
+            || str_contains($t, 'ban phim')
+            || str_contains($t, 'chuột')
+            || str_contains($t, 'chuot')
+            || str_contains($t, 'tai nghe');
     }
 
     /** User có đang hỏi về sản phẩm không? */
@@ -231,6 +270,7 @@ class ChatController extends Controller
         $words = [
             'laptop', 'macbook', 'gaming', 'mua', 'tìm', 'giá', 'mẫu', 'gợi ý',
             'phù hợp', 'sản phẩm', 'tư vấn', 'học', 'sinh viên', 'tai nghe', 'chuột',
+            'bàn phím', 'ban phim',
         ];
 
         foreach ($words as $w) {
@@ -244,10 +284,17 @@ class ChatController extends Controller
 
     private function findProducts(string $text, int $limit = 4)
     {
-        $keys = $this->searchKeywords($text);
+        $keys         = $this->searchKeywords($text);
+        $categorySlug = $this->detectCategorySlug($text);
+
+        $baseQuery = Product::where('is_active', true);
+
+        if ($categorySlug) {
+            $baseQuery->whereHas('category', fn ($q) => $q->where('slug', $categorySlug));
+        }
 
         if ($keys !== []) {
-            $found = Product::where('is_active', true)
+            $found = (clone $baseQuery)
                 ->where(function ($q) use ($keys) {
                     foreach ($keys as $k) {
                         $q->orWhere('name', 'like', '%' . $k . '%');
@@ -261,7 +308,14 @@ class ChatController extends Controller
             }
         }
 
-        // Không khớp → lấy SP gợi ý
+        // Có danh mục rõ (vd. bàn phím) nhưng không khớp tên → lấy SP trong danh mục đó
+        if ($categorySlug) {
+            $byCategory = (clone $baseQuery)->limit($limit)->get();
+            if ($byCategory->isNotEmpty()) {
+                return ['products' => $byCategory, 'fallback' => false];
+            }
+        }
+
         return [
             'products' => Product::where('is_active', true)->inRandomOrder()->limit($limit)->get(),
             'fallback' => true,
@@ -284,11 +338,23 @@ class ChatController extends Controller
         $t = mb_strtolower($text);
         $hi  = $name ? " {$name}" : '';
 
-        if (str_contains($t, 'học') || str_contains($t, 'sinh viên') || str_contains($t, 'laptop đi học')) {
-            return "Dạ chào{$hi}! Em gợi ý laptop nhẹ, pin tốt phù hợp đi học bên dưới ạ.";
+        if (str_contains($t, 'bàn phím') || str_contains($t, 'ban phim')) {
+            return "Dạ chào{$hi}! Em gợi ý bàn phím gõ êm, phù hợp đi học bên dưới ạ.";
+        }
+        if (str_contains($t, 'chuột') || str_contains($t, 'chuot')) {
+            return "Dạ chào{$hi}! Em gợi ý chuột chính hãng bên dưới ạ.";
+        }
+        if (str_contains($t, 'tai nghe')) {
+            return "Dạ chào{$hi}! Em gợi ý tai nghe học online / giải trí bên dưới ạ.";
         }
         if (str_contains($t, 'gaming')) {
             return "Dạ chào{$hi}! Các mẫu phù hợp gaming anh/chị tham khảo bên dưới ạ.";
+        }
+        if (
+            (str_contains($t, 'học') || str_contains($t, 'sinh viên') || str_contains($t, 'laptop đi học'))
+            && ! $this->mentionsAccessory($t)
+        ) {
+            return "Dạ chào{$hi}! Em gợi ý laptop nhẹ, pin tốt phù hợp đi học bên dưới ạ.";
         }
         if ($fallback) {
             return "Dạ chào{$hi}! Em gợi ý thêm vài sản phẩm hot bên dưới ạ.";
