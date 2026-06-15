@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Services\OrderStockService;
 use App\Services\VoucherService;
+use App\Services\GhnShippingService;
 use App\Support\PriceHelper;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\DB;
@@ -18,9 +19,12 @@ use Illuminate\Support\Facades\DB;
 
 class OrderController extends Controller
 {
+    private const FREE_SHIPPING_THRESHOLD = 10_000_000;
+
     public function __construct(
         private VoucherService $voucherService,
         private OrderStockService $orderStockService,
+        private GhnShippingService $ghnShippingService,
     ) {}
 
     //đặt hàng
@@ -31,6 +35,8 @@ class OrderController extends Controller
             'phone' => ['required', 'string', 'size:10','regex:/^0\d{9}$/'],
             'address' => ['required', 'string', 'min:5'],
             'note' => ['nullable', 'string'],
+            'to_district_id' => ['required', 'integer', 'min:1'],
+            'to_ward_code' => ['required', 'string', 'max:20'],
             //phương thức thanh toán
             'payment_method' => ['required', 'in:cod,stripe'],
 
@@ -70,8 +76,15 @@ class OrderController extends Controller
             $userVoucher = $voucherResult['user_voucher'];
             $voucherDiscount = $voucherResult['discount'];
 
-            // Tổng thanh toán = tiền hàng - giảm voucher
-            $finalSubtotal = $itemsSubtotal - $voucherDiscount;
+            $shippingFee = $this->resolveShippingFee(
+                $validated['to_district_id'],
+                $validated['to_ward_code'],
+                $validated['items'],
+                $itemsSubtotal,
+            );
+
+            // Tổng thanh toán = tiền hàng - voucher + phí ship
+            $finalSubtotal = $itemsSubtotal - $voucherDiscount + $shippingFee;
 
             // Kiểm tra và trừ tồn kho trước khi tạo đơn
             foreach ($validated['items'] as $item) {
@@ -88,6 +101,7 @@ class OrderController extends Controller
                 'address' => $validated['address'],
                 'note' => $validated['note'] ?? null,
                 'subtotal' => $finalSubtotal,
+                'shipping_fee' => $shippingFee,
                 'voucher_id' => $voucher?->id,
                 'voucher_discount' => $voucherDiscount,
                 'status' => 'pending',
@@ -121,6 +135,7 @@ class OrderController extends Controller
             'order_code' => $order->order_code,
             'payment_method' => $order->payment_method,
             'subtotal' => $order->subtotal,
+            'shipping_fee' => $order->shipping_fee,
             'voucher_discount' => $order->voucher_discount,
             'message' => 'Đặt hàng thành công',
         ], 201);
@@ -137,6 +152,7 @@ class OrderController extends Controller
                 'id',
                 'order_code',
                 'subtotal',
+                'shipping_fee',
                 'voucher_id',
                 'voucher_discount',
                 'payment_method',
@@ -294,6 +310,38 @@ class OrderController extends Controller
         }
 
         $product->decrement('stock', $item['quantity']);
+    }
+
+    private function resolveShippingFee(
+        int $toDistrictId,
+        string $toWardCode,
+        array $items,
+        int $itemsSubtotal,
+    ): int {
+        if ($itemsSubtotal >= self::FREE_SHIPPING_THRESHOLD) {
+            return 0;
+        }
+
+        try {
+            return $this->ghnShippingService->calculateFee(
+                $toDistrictId,
+                $toWardCode,
+                $this->estimateCartWeightGram($items),
+                $itemsSubtotal,
+            );
+        } catch (\RuntimeException $e) {
+            $this->failStock('Không tính được phí vận chuyển: ' . $e->getMessage());
+        }
+    }
+
+    private function estimateCartWeightGram(array $items): int
+    {
+        $gram = 0;
+        foreach ($items as $item) {
+            $gram += 1500 * $item['quantity'];
+        }
+
+        return max($gram, (int) config('ghn.default_weight', 1500));
     }
 
     private function failStock(string $message): void

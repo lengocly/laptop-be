@@ -12,6 +12,9 @@ use App\Http\Controllers\Api\AdminVoucherController;
 use App\Http\Controllers\Api\VoucherController;
 use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\ChatController;
+use App\Http\Controllers\Api\ShippingController;
+use App\Http\Controllers\Api\ImageSearchController;
+
 
 //Gom các route API vào nhóm chung, mọi URL trong nhóm đều có thêm /v1 phía trước
 Route::prefix('v1')->group(function () {
@@ -24,6 +27,15 @@ Route::prefix('v1')->group(function () {
     Route::middleware('throttle:20,1')->post('/chat', [ChatController::class, 'send']);
 
     Route::get('/categories', [CategoryController::class, 'index']);
+
+    // GHN — địa chỉ + tính phí vận chuyển (proxy, không lộ token)
+    Route::get('/shipping/provinces', [ShippingController::class, 'provinces']);
+    Route::get('/shipping/districts', [ShippingController::class, 'districts']);
+    Route::get('/shipping/wards', [ShippingController::class, 'wards']);
+    Route::post('/shipping/calculate-fee', [ShippingController::class, 'calculateFee']);
+
+    // Tìm kiếm sản phẩm theo ảnh
+    Route::post('/search/by-image', [ImageSearchController::class, 'searchByImage']);
 
     //Controller xử lý — file ProductController.php
     Route::get('/products', [ProductController::class, 'index']);

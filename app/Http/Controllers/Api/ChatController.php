@@ -67,7 +67,7 @@ class ChatController extends Controller
             'chính sách đổi trả' => 'BetaTech hỗ trợ đổi trả 14 ngày (lỗi NSX) hoặc 30 ngày (tùy sản phẩm). '
                 . 'Hàng còn seal, đủ phụ kiện. Liên hệ hotline trên web để được hướng dẫn ạ.',
             'cách đặt hàng' => 'Chọn sản phẩm → Thêm giỏ → Thanh toán (COD hoặc Stripe). '
-                . 'Đơn từ 500.000₫ miễn phí ship. Cần đặt hộ, gọi hotline BetaTech ạ.',
+                . 'Đơn từ 10.000.000₫ miễn phí ship. Cần đặt hộ, gọi hotline BetaTech ạ.',
             'xem khuyến mãi' => 'Khuyến mãi cập nhật tại trang chủ. '
                 . 'Anh/chị thử bấm "Laptop đi học" hoặc "Tìm laptop gaming" để xem SP ạ.',
         ];

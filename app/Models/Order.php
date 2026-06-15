@@ -15,6 +15,7 @@ class Order extends Model
         'note',
         'admin_note',
         'subtotal',
+        'shipping_fee',
         'voucher_id',
         'voucher_discount',
         'status',

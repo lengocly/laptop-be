@@ -26,34 +26,36 @@ class ProductController extends Controller
             });
         }
 
-        // chỉ lấy SP đang bán, hiện có 2sp trong db từ dl productseeder
-        // + whereHas khi có category
-        $products = $query->get(); 
+        $products = $query
+            ->withAvg('reviews', 'rating')
+            ->withCount('reviews')
+            ->get();
 
-        //Kho lưu tên cột: price_display, image_main, image_hover
-        //React cần: price, images (mảng 2 URL)
-
-        $contents = $products->map(function ($p) {
-            //map = lặp từng laptop, tạo phiên bản mới đúng format.
-
-            return [
-                'id'     => $p->id,
-                'name'   => $p->name,
-                'price'  => $p->price_display,
-                'price_original'  => $p->price_original,
-
-                //gộp 2 cột ảnh
-                //array_filter = bỏ ảnh null
-                'images' => array_values(array_filter([
-                    asset('storage/' . $p->image_main),
-                    $p->image_hover ? asset('storage/' . $p->image_hover) : null,
-                ])),
-            ];
-        });
+        $contents = $products->map(fn ($p) => $this->formatListItem($p));
         return response()->json(['contents' => $contents]);
     }
 
-    //chi tiết sản phẩm
+    private function formatListItem(Product $p): array
+    {
+        $reviewCount = (int) $p->reviews_count;
+
+        return [
+            'id'              => $p->id,
+            'name'            => $p->name,
+            'price'           => $p->price_display,
+            'price_original'  => $p->price_original,
+            'stock'           => $p->stock,
+            'images'          => array_values(array_filter([
+                asset('storage/' . $p->image_main),
+                $p->image_hover ? asset('storage/' . $p->image_hover) : null,
+            ])),
+            'review_count'    => $reviewCount,
+            'rating_average'  => $reviewCount > 0
+                ? round((float) $p->reviews_avg_rating, 1)
+                : null,
+        ];
+    }
+
     public function show(string $id)
     {
         //category.parent = từ danh mục con, load thêm cha (belongsTo trên Category)
@@ -71,23 +73,15 @@ class ProductController extends Controller
             $related = Product::where('category_id', $product->category_id)
                 ->where('id', '!=', $product->id)
                 ->where('is_active', true)
+                ->withAvg('reviews', 'rating')
+                ->withCount('reviews')
                 ->limit(5)
                 ->get();
         }
 
-        //Chuyển dữ liệu sản phẩm sang dạng frontend cần
-        $relatedProducts = $related->map(function ($p) {
-            return [
-                'id'             => $p->id,
-                'name'           => $p->name,
-                'price'          => $p->price_display,
-                'price_original' => $p->price_original,
-                'images'         => array_values(array_filter([
-                    asset('storage/' . $p->image_main),
-                    $p->image_hover ? asset('storage/' . $p->image_hover) : null,
-                ])),
-            ];
-        })->values();
+        $relatedProducts = $related
+            ->map(fn ($p) => $this->formatListItem($p))
+            ->values();
 
 
         //Chuyển dữ liệu biến thể sang dạng frontend cần

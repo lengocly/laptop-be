@@ -20,7 +20,7 @@ class ProductSeeder extends Seeder
             'slug'           => 'asus-vivobook-15',
             'price_display'  => '15.990.000 ₫',
             'price_original' => '18.990.000 ₫',
-            'image_main'     => 'products/asus1.png',
+            'image_main'     => 'products/asus1.jpg',
             'image_hover'    => 'products/asus2.webp',
             'cpu'            => 'Intel Core i5-1335U',
             'ram'            => '16GB',
