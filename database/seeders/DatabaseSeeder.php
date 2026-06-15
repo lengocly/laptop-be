@@ -2,34 +2,30 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
+/**
+ * Seeder gốc — chạy 1 lệnh tạo lại TOÀN BỘ dữ liệu demo.
+ *
+ *   php artisan migrate:fresh --seed
+ *
+ * Thứ tự quan trọng: user → danh mục → SP → biến thể → voucher → khách demo → đơn hàng
+ */
 class DatabaseSeeder extends Seeder
 {
     use WithoutModelEvents;
+
     public function run(): void
     {
-
-        // Gọi seeder admin user
         $this->call([
-            AdminUserSeeder::class,
+            AdminUserSeeder::class,      // admin@betatech.com
+            CategorySeeder::class,       // Laptop (hãng) + Phụ kiện
+            ProductSeeder::class,        // Sản phẩm mẫu
+            ProductVariantSeeder::class, // Biến thể (màu tai nghe, cấu hình MacBook...)
+            VoucherSeeder::class,        // Mã giảm giá demo
+            DemoUserSeeder::class,       // khach@betatech.com
+            OrderSeeder::class,          // Đơn hàng mẫu cho dashboard
         ]);
-
-        // User::factory(10)->create();
-
-        // User::factory()->create([
-        //     'name' => 'Test User',
-        //     'email' => 'test@example.com',
-        // ]);
-
-        $this->call(CategorySeeder::class);  // trước
-
-        //ProductSeeder là file riêng — Laravel không tự chạy nó nếu bạn không gọi.
-        $this->call(ProductSeeder::class);
-
-        //Biến thể sản phẩm: màu sắc, bộ nhớ, cấu hình, ...
-        $this->call(ProductVariantSeeder::class);
     }
 }

@@ -2,44 +2,64 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
-use Illuminate\Database\Seeder;
-
 use App\Models\Category;
+use Illuminate\Database\Seeder;
 
 class CategorySeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
-        //Nhóm cha Laptop
-        $laptop = Category::create([
+        // ===== Nhóm cha: Laptop (chỉ nhóm, SP gắn vào danh mục con = hãng) =====
+        $laptopGroup = Category::create([
             'name' => 'Laptop',
             'slug' => 'laptop-group',
             'parent_id' => null,
+            'image' => 'products/mac1.png',
+            'sort_order' => 1,
         ]);
 
-        //Danh mục con để filter sản phẩm laptop
-        Category::create([
-            'name' => 'Laptop',
-            'slug' => 'laptop',
-            'parent_id' => $laptop->id,
-        ]);
+        // Danh mục con = hãng laptop — slug dùng lọc ?category=asus
+        $laptopBrands = [
+            ['name' => 'ASUS', 'slug' => 'asus', 'image' => 'products/asus1.jpg'],
+            ['name' => 'Dell', 'slug' => 'dell', 'image' => 'products/dell1.jpg'],
+            ['name' => 'MacBook', 'slug' => 'macbook', 'image' => 'products/mac1.png'],
+            ['name' => 'Lenovo', 'slug' => 'lenovo', 'image' => 'products/l1.webp'],
+            ['name' => 'HP', 'slug' => 'hp', 'image' => 'products/h1.webp'],
+        ];
 
-        //Nhóm cha Phụ kiện
+        foreach ($laptopBrands as $i => $brand) {
+            Category::create([
+                'name' => $brand['name'],
+                'slug' => $brand['slug'],
+                'parent_id' => $laptopGroup->id,
+                'image' => $brand['image'],
+                'sort_order' => $i + 1,
+            ]);
+        }
+
+        // ===== Nhóm cha: Phụ kiện =====
         $phuKien = Category::create([
             'name' => 'Phụ kiện',
             'slug' => 'phu-kien',
             'parent_id' => null,
+            'image' => 'products/c1.webp',
+            'sort_order' => 2,
         ]);
 
-        Category::create(['name' => 'Chuột',      'slug' => 'chuot',      'parent_id' => $phuKien->id]);
-        Category::create(['name' => 'Bàn phím',   'slug' => 'ban-phim',   'parent_id' => $phuKien->id]);
-        Category::create(['name' => 'Tai nghe',   'slug' => 'tai-nghe',   'parent_id' => $phuKien->id]);
-   
+        $accessories = [
+            ['name' => 'Chuột', 'slug' => 'chuot', 'image' => 'products/c1.webp'],
+            ['name' => 'Bàn phím', 'slug' => 'ban-phim', 'image' => 'products/ba1.webp'],
+            ['name' => 'Tai nghe', 'slug' => 'tai-nghe', 'image' => 'products/t1.webp'],
+        ];
 
-       
+        foreach ($accessories as $i => $item) {
+            Category::create([
+                'name' => $item['name'],
+                'slug' => $item['slug'],
+                'parent_id' => $phuKien->id,
+                'image' => $item['image'],
+                'sort_order' => $i + 1,
+            ]);
+        }
     }
 }

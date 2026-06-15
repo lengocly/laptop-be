@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\AdminOrderController;
 use App\Http\Controllers\Api\AdminProductController;
 use App\Http\Controllers\Api\AdminVoucherController;
+use App\Http\Controllers\Api\AdminCategoryController;
 use App\Http\Controllers\Api\VoucherController;
 use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\ChatController;
@@ -131,6 +132,13 @@ Route::prefix('v1')->group(function () {
           Route::put('/vouchers/{voucher}', [AdminVoucherController::class, 'update']);
           Route::delete('/vouchers/{voucher}', [AdminVoucherController::class, 'destroy']);
           Route::patch('/vouchers/{voucher}/toggle', [AdminVoucherController::class, 'toggleActive']);
+
+          // ===== Admin danh mục =====
+          Route::get('/categories', [AdminCategoryController::class, 'index']);
+          Route::post('/categories', [AdminCategoryController::class, 'store']);
+          Route::post('/categories/upload-image', [AdminCategoryController::class, 'uploadImage']);
+          Route::put('/categories/{category}', [AdminCategoryController::class, 'update']);
+          Route::delete('/categories/{category}', [AdminCategoryController::class, 'destroy']);
       });
     });
 

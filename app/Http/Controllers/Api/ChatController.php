@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use App\Models\Product;
+use App\Models\Category;
 
 class ChatController extends Controller
 {
@@ -241,13 +242,29 @@ class ChatController extends Controller
         }
         if (
             str_contains($t, 'laptop')
-            || str_contains($t, 'macbook')
             || (str_contains($t, 'đi học') && ! $this->mentionsAccessory($t))
         ) {
-            return 'laptop';
+            return 'laptop-group';
+        }
+        if (str_contains($t, 'macbook')) {
+            return 'macbook';
         }
 
         return null;
+    }
+
+    /** Lọc SP theo slug danh mục con hoặc cả nhóm laptop */
+    private function applyCategoryFilter($query, string $categorySlug): void
+    {
+        if ($categorySlug === 'laptop-group') {
+            $parent = Category::where('slug', 'laptop-group')->first();
+            if ($parent) {
+                $query->whereIn('category_id', $parent->children()->pluck('id'));
+            }
+            return;
+        }
+
+        $query->whereHas('category', fn ($q) => $q->where('slug', $categorySlug));
     }
 
     private function mentionsAccessory(string $t): bool
@@ -290,7 +307,7 @@ class ChatController extends Controller
         $baseQuery = Product::where('is_active', true);
 
         if ($categorySlug) {
-            $baseQuery->whereHas('category', fn ($q) => $q->where('slug', $categorySlug));
+            $this->applyCategoryFilter($baseQuery, $categorySlug);
         }
 
         if ($keys !== []) {

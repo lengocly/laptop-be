@@ -84,6 +84,58 @@ Mật khẩu: giá trị ADMIN_PASSWORD trong .env
 Nếu chưa cấu hình `ADMIN_PASSWORD`, seeder dùng `Admin123456`. Cần đổi mật khẩu
 này trước khi triển khai.
 
+## Dữ liệu demo & reset (cho báo cáo / thầy chấm)
+
+Toàn bộ dữ liệu mẫu được tạo bằng **Seeder** trong `database/seeders/`:
+
+| Seeder | Nội dung |
+| --- | --- |
+| `AdminUserSeeder` | Tài khoản admin |
+| `CategorySeeder` | Danh mục Laptop (hãng) + Phụ kiện |
+| `ProductSeeder` | Sản phẩm mẫu |
+| `ProductVariantSeeder` | Biến thể (màu, cấu hình) |
+| `VoucherSeeder` | Voucher BETATECH100K, SALE5... |
+| `DemoUserSeeder` | Khách `khach@betatech.com` |
+| `OrderSeeder` | 6 đơn hàng mẫu (pending, delivered...) |
+
+**Xóa hết và tạo lại toàn bộ** (chuẩn khi demo / cài máy mới):
+
+```bash
+php artisan migrate:fresh --seed
+php artisan storage:link
+```
+
+**Xóa hết, chỉ giữ admin — nhập SP/danh mục/đơn bằng tay qua web:**
+
+```bash
+php artisan migrate:fresh --seed --seeder=FreshManualSeeder
+php artisan storage:link
+```
+
+Sau lệnh trên: đăng nhập admin → thêm **Danh mục** → **Sản phẩm** → khách đặt hàng thật.
+
+> Cảnh báo: các lệnh `migrate:fresh` **xóa toàn bộ** dữ liệu trong database.
+
+**Chỉ nạp lại dữ liệu mẫu** (chỉ dùng khi DB còn trống hoặc sau `migrate:fresh`):
+
+```bash
+php artisan db:seed
+```
+
+**Chạy từng phần** (bổ sung khi đã có danh mục + SP):
+
+```bash
+php artisan db:seed --class=OrderSeeder
+php artisan db:seed --class=VoucherSeeder
+```
+
+Tài khoản khách demo sau seed:
+
+```text
+Email: khach@betatech.com
+Mật khẩu: Khach123456
+```
+
 ## API tiêu biểu
 
 | Phương thức | Endpoint | Mô tả |

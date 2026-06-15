@@ -5,6 +5,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Product;
+use App\Models\Category;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 
@@ -17,18 +18,28 @@ class ProductController extends Controller
         //Chỉ SP đang bán
         $query = Product::where('is_active', true);
 
-        //Có tham số category và không rỗng → mới lọc
+        // Lọc theo slug danh mục con (vd: asus, chuot)
         if ($request->filled('category')) {
-            //Lấy giá trị, vd: 'chuot'
             $slug = $request->query('category');
             $query->whereHas('category', function ($q) use ($slug) {
                 $q->where('slug', $slug);
             });
         }
 
+        // Lọc theo nhóm cha (vd: group=laptop-group → tất cả hãng laptop)
+        if ($request->filled('group')) {
+            $groupSlug = $request->query('group');
+            $parent = Category::where('slug', $groupSlug)->whereNull('parent_id')->first();
+
+            if ($parent) {
+                $childIds = $parent->children()->pluck('id');
+                $query->whereIn('category_id', $childIds);
+            }
+        }
+
         $products = $query
             ->withAvg('reviews', 'rating')
-            ->withCount('reviews')
+            ->withCount(['reviews', 'variants'])
             ->get();
 
         $contents = $products->map(fn ($p) => $this->formatListItem($p));
@@ -53,6 +64,7 @@ class ProductController extends Controller
             'rating_average'  => $reviewCount > 0
                 ? round((float) $p->reviews_avg_rating, 1)
                 : null,
+            'has_variants'    => (int) $p->variants_count > 0,
         ];
     }
 
@@ -74,7 +86,7 @@ class ProductController extends Controller
                 ->where('id', '!=', $product->id)
                 ->where('is_active', true)
                 ->withAvg('reviews', 'rating')
-                ->withCount('reviews')
+                ->withCount(['reviews', 'variants'])
                 ->limit(5)
                 ->get();
         }
