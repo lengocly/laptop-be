@@ -3,10 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 //biến thể sản phẩm: màu sắc, bộ nhớ, cấu hình, ...
 class ProductVariant extends Model
 {
+    use SoftDeletes;
     protected $fillable = [
         'product_id',
         'group_key',

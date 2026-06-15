@@ -99,7 +99,7 @@ class ReviewController extends Controller
     private function userHasPurchased(int $userId, int $productId): bool
     {
         return Order::where('user_id', $userId)
-            ->where('status', 'delivered')
+            ->where('fulfillment_status', 'delivered')
             ->whereHas('items', fn ($q) => $q->where('product_id', $productId))
             ->exists();
     }

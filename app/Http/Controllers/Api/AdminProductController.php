@@ -78,6 +78,7 @@ class AdminProductController extends Controller
             'is_active' => ['boolean'],
 
             'variants' => ['nullable', 'array'],
+            'variants.*.id' => ['nullable', 'integer'],
             'variants.*.group_key' => ['required_with:variants', 'string', 'max:100'],
             'variants.*.group_label' => ['required_with:variants', 'string', 'max:100'],
             'variants.*.option_label' => ['required_with:variants', 'string', 'max:255'],
@@ -158,6 +159,7 @@ class AdminProductController extends Controller
             'is_active' => ['boolean'],
 
             'variants' => ['nullable', 'array'],
+            'variants.*.id' => ['nullable', 'integer'],
             'variants.*.group_key' => ['required_with:variants', 'string', 'max:100'],
             'variants.*.group_label' => ['required_with:variants', 'string', 'max:100'],
             'variants.*.option_label' => ['required_with:variants', 'string', 'max:255'],
@@ -185,22 +187,8 @@ class AdminProductController extends Controller
             //cập nhật sản phẩm vào database
             $product->update($data);
 
-            //xóa biến thể cũ rồi tạo lại
-            $product->allVariants()->delete();
-
-            foreach ($validated['variants'] ?? [] as $i => $variant) {
-                    $product->allVariants()->create([
-                    'group_key' => $variant['group_key'],
-                    'group_label' => $variant['group_label'],
-                    'option_label' => $variant['option_label'],
-                    'sku' => $variant['sku'] ?? null,
-                    'price_display' => $variant['price_display'] ?? null,
-                    'price_original' => $variant['price_original'] ?? null,
-                    'stock' => $variant['stock'] ?? 0,
-                    'sort_order' => $variant['sort_order'] ?? $i,
-                    'is_active' => $variant['is_active'] ?? true,
-                ]);
-            }
+            // Đồng bộ biến thể — update/upsert, không xóa rồi tạo lại
+            $this->syncVariants($product, $validated['variants'] ?? []);
         });
 
         return response()->json(
@@ -221,6 +209,46 @@ class AdminProductController extends Controller
         return response()->json([
             'message' => 'Đã xóa sản phẩm'
         ]);
+    }
+
+    /** Update hoặc tạo variant; soft-delete variant không còn trong payload. */
+    private function syncVariants(Product $product, array $variants): void
+    {
+        $keepIds = [];
+
+        foreach ($variants as $i => $variant) {
+            $payload = [
+                'group_key' => $variant['group_key'],
+                'group_label' => $variant['group_label'],
+                'option_label' => $variant['option_label'],
+                'sku' => $variant['sku'] ?? null,
+                'price_display' => $variant['price_display'] ?? null,
+                'price_original' => $variant['price_original'] ?? null,
+                'stock' => $variant['stock'] ?? 0,
+                'sort_order' => $variant['sort_order'] ?? $i,
+                'is_active' => $variant['is_active'] ?? true,
+            ];
+
+            if (!empty($variant['id'])) {
+                $existing = $product->allVariants()->withTrashed()->find($variant['id']);
+                if ($existing) {
+                    if ($existing->trashed()) {
+                        $existing->restore();
+                    }
+                    $existing->update($payload);
+                    $keepIds[] = $existing->id;
+                    continue;
+                }
+            }
+
+            $created = $product->allVariants()->create($payload);
+            $keepIds[] = $created->id;
+        }
+
+        $product->allVariants()
+            ->whereNotIn('id', $keepIds)
+            ->get()
+            ->each(fn ($v) => $v->delete());
     }
 
     // Upload ảnh sản phẩm
