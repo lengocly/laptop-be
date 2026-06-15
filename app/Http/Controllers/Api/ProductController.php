@@ -38,6 +38,7 @@ class ProductController extends Controller
         }
 
         $products = $query
+            ->with(['category.parent'])
             ->withAvg('reviews', 'rating')
             ->withCount(['reviews', 'variants'])
             ->get();
@@ -49,6 +50,7 @@ class ProductController extends Controller
     private function formatListItem(Product $p): array
     {
         $reviewCount = (int) $p->reviews_count;
+        $parent = $p->category?->parent;
 
         return [
             'id'              => $p->id,
@@ -56,6 +58,11 @@ class ProductController extends Controller
             'price'           => $p->price_display,
             'price_original'  => $p->price_original,
             'stock'           => $p->stock,
+            'cpu'             => $p->cpu,
+            'ram'             => $p->ram,
+            'storage'         => $p->storage,
+            'screen'          => $p->screen,
+            'parent_group_slug' => $parent?->slug,
             'images'          => array_values(array_filter([
                 asset('storage/' . $p->image_main),
                 $p->image_hover ? asset('storage/' . $p->image_hover) : null,
@@ -85,6 +92,7 @@ class ProductController extends Controller
             $related = Product::where('category_id', $product->category_id)
                 ->where('id', '!=', $product->id)
                 ->where('is_active', true)
+                ->with(['category.parent'])
                 ->withAvg('reviews', 'rating')
                 ->withCount(['reviews', 'variants'])
                 ->limit(5)
@@ -149,6 +157,7 @@ class ProductController extends Controller
                     'parent' => $product->category->parent ? [
                         'id'   => $product->category->parent->id,
                         'name' => $product->category->parent->name,
+                        'slug' => $product->category->parent->slug,
                     ] : null,
                 ] : null,
                 'variant_group' => $variantGroup,
