@@ -1,10 +1,6 @@
 <?php
-
 namespace App\Models;
-
 use Illuminate\Database\Eloquent\Model;
-
-// bảng lưu các sản phẩm nằm trong đơn hàng đó
 class OrderItem extends Model
 {
     protected $fillable = [
@@ -17,9 +13,9 @@ class OrderItem extends Model
         'quantity',
         'line_total',
     ];
-
     public function order()
     {
         return $this->belongsTo(Order::class);
     }
 }
+

@@ -15,7 +15,7 @@ class ProductVariantSeeder extends Seeder
      */
     public function run(): void
     {
-         // --- Màu: Tai nghe Sony ---
+
          $sony = Product::where('slug', 'tai-nghe-sony-ch520')->first();
          if ($sony) {
              ProductVariant::create([
@@ -37,7 +37,7 @@ class ProductVariantSeeder extends Seeder
                  'sort_order' => 2,
              ]);
          }
-         // --- Cấu hình: MacBook ---
+
          $mac = Product::where('slug', 'macbook-pro-14')->first();
         if ($mac) {
             ProductVariant::create([
@@ -63,6 +63,7 @@ class ProductVariantSeeder extends Seeder
                  'sort_order' => 2,
             ]);
         }
-         // Chuột / ASUS / ... : không create → không có variant
+
     }
 }
+

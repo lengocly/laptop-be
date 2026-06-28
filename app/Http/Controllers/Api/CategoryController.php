@@ -1,13 +1,9 @@
 <?php
-
 namespace App\Http\Controllers\Api;
-
 use App\Http\Controllers\Controller;
 use App\Models\Category;
-
 class CategoryController extends Controller
 {
-    // API công khai — menu cửa hàng, trang chủ, lọc hãng laptop
     public function index()
     {
         $parents = Category::whereNull('parent_id')
@@ -15,12 +11,9 @@ class CategoryController extends Controller
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
-
         $categories = $parents->map(fn ($parent) => $this->formatParent($parent));
-
         return response()->json(['categories' => $categories]);
     }
-
     private function formatParent(Category $parent): array
     {
         return [
@@ -40,3 +33,4 @@ class CategoryController extends Controller
         ];
     }
 }
+

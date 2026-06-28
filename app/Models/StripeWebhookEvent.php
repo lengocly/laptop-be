@@ -1,13 +1,9 @@
 <?php
-
 namespace App\Models;
-
 use Illuminate\Database\Eloquent\Model;
-
 class StripeWebhookEvent extends Model
 {
     public $timestamps = false;
-
     protected $fillable = [
         'event_id',
         'type',
@@ -17,7 +13,6 @@ class StripeWebhookEvent extends Model
         'processing_started_at',
         'processed_at',
     ];
-
     protected function casts(): array
     {
         return [
@@ -26,3 +21,4 @@ class StripeWebhookEvent extends Model
         ];
     }
 }
+

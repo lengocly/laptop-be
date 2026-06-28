@@ -1,57 +1,40 @@
 <?php
-
-//Trả về JSON dạng: danh sách có id, name, price, images. Đó là hàm index() (index = danh sách).
-
 namespace App\Http\Controllers\Api;
-
 use App\Models\Product;
 use App\Models\Category;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-
 class ProductController extends Controller
 {
-    //Nhận request + query cơ bản
     public function index(Request $request)
     {
-        //Query builder — chưa chạy SQL, chỉ xây điều kiện
-        //Chỉ SP đang bán
         $query = Product::where('is_active', true);
-
-        // Lọc theo slug danh mục con (vd: asus, chuot)
         if ($request->filled('category')) {
             $slug = $request->query('category');
             $query->whereHas('category', function ($q) use ($slug) {
                 $q->where('slug', $slug);
             });
         }
-
-        // Lọc theo nhóm cha (vd: group=laptop-group → tất cả hãng laptop)
         if ($request->filled('group')) {
             $groupSlug = $request->query('group');
             $parent = Category::where('slug', $groupSlug)->whereNull('parent_id')->first();
-
             if ($parent) {
                 $childIds = $parent->children()->pluck('id');
                 $query->whereIn('category_id', $childIds);
             }
         }
-
         $products = $query
             ->with(['category.parent'])
             ->withAvg('reviews', 'rating')
             ->withCount(['reviews', 'variants'])
             ->get();
-
         $contents = $products->map(fn ($p) => $this->formatListItem($p));
         return response()->json(['contents' => $contents]);
     }
-
     private function formatListItem(Product $p): array
     {
         $reviewCount = (int) $p->reviews_count;
         $parent = $p->category?->parent;
-
         return [
             'id'              => $p->id,
             'name'            => $p->name,
@@ -74,20 +57,12 @@ class ProductController extends Controller
             'has_variants'    => (int) $p->variants_count > 0,
         ];
     }
-
     public function show(string $id)
     {
-        //category.parent = từ danh mục con, load thêm cha (belongsTo trên Category)
         $product = Product::with(['category.parent', 'variants'])
             ->where('is_active', true)
-            ->findOrFail($id); //Nếu không tìm thấy, throw 404
-
-
-        // Sản phẩm liên quan: cùng danh mục, khác id, tối đa 5
+            ->findOrFail($id);
         $related = collect();
-        //ban đầu chưa có sản phẩm liên quan nào, nên tạo một danh sách trống trước.
-
-        //Kiểm tra sản phẩm có danh mục không, lấy tối đa 5 sản phẩm cùng danh mục
         if ($product->category_id) {
             $related = Product::where('category_id', $product->category_id)
                 ->where('id', '!=', $product->id)
@@ -98,14 +73,9 @@ class ProductController extends Controller
                 ->limit(5)
                 ->get();
         }
-
         $relatedProducts = $related
             ->map(fn ($p) => $this->formatListItem($p))
             ->values();
-
-
-        //Chuyển dữ liệu biến thể sang dạng frontend cần
-        //map() nghĩa là: duyệt qua từng biến thể và biến đổi dữ liệu
         $variants = $product->variants->map(function ($v) use ($product) {
             return [
                 'id' => $v->id,
@@ -123,9 +93,6 @@ class ProductController extends Controller
                 ])),
             ];
         })->values();
-        //Sau khi map() xong, values() dùng để reset lại index của collection.
-        
-        //Tạo nhóm biến thể: màu sắc, bộ nhớ, cấu hình, ...
         $variantGroup = null;
         if ($variants->isNotEmpty()) {
             $first = $product->variants->first();
@@ -134,8 +101,6 @@ class ProductController extends Controller
                 'label' => $first->group_label,
             ];
         }
-
-            //Trả JSON — format cho React
         return response()->json([
             'product' => [
                 'id'      => $product->id,
@@ -163,8 +128,8 @@ class ProductController extends Controller
                 'variant_group' => $variantGroup,
                 'variants' => $variants,
             ],
-            //đưa danh sách sản phẩm liên quan vào dữ liệu trả về cho frontend.
             'related_products' => $relatedProducts,
         ]);
     }
 }
+

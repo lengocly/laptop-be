@@ -19,3 +19,4 @@ class FreshManualSeeder extends Seeder
         ]);
     }
 }
+

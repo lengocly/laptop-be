@@ -1,10 +1,8 @@
 <?php
-
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-
 return new class extends Migration
 {
     public function up(): void
@@ -19,12 +17,10 @@ return new class extends Migration
             $table->timestamp('inventory_released_at')->nullable()->after('expires_at');
             $table->timestamp('voucher_released_at')->nullable()->after('inventory_released_at');
         });
-
         if (Schema::hasColumn('orders', 'status')) {
             foreach (DB::table('orders')->orderBy('id')->get() as $order) {
                 $orderStatus = 'confirmed';
                 $fulfillment = 'unfulfilled';
-
                 if ($order->status === 'cancelled') {
                     $orderStatus = 'cancelled';
                 } elseif ($order->status === 'delivered') {
@@ -40,26 +36,22 @@ return new class extends Migration
                 ) {
                     $orderStatus = 'pending_payment';
                 }
-
                 DB::table('orders')->where('id', $order->id)->update([
                     'order_status' => $orderStatus,
                     'fulfillment_status' => $fulfillment,
                     'items_subtotal' => max(0, (int) $order->subtotal - (int) ($order->shipping_fee ?? 0) + (int) ($order->voucher_discount ?? 0)),
                 ]);
             }
-
             Schema::table('orders', function (Blueprint $table) {
                 $table->dropColumn('status');
             });
         }
-
         Schema::table('user_vouchers', function (Blueprint $table) {
             $table->string('reservation_status', 16)->default('available')->after('voucher_id');
             $table->foreignId('reserved_order_id')->nullable()->after('reservation_status')
                 ->constrained('orders')->nullOnDelete();
             $table->timestamp('reserved_at')->nullable()->after('reserved_order_id');
         });
-
         Schema::create('inventory_transactions', function (Blueprint $table) {
             $table->id();
             $table->foreignId('product_id')->constrained()->cascadeOnDelete();
@@ -71,7 +63,6 @@ return new class extends Migration
             $table->json('meta')->nullable();
             $table->timestamp('created_at')->useCurrent();
         });
-
         Schema::create('payments', function (Blueprint $table) {
             $table->id();
             $table->foreignId('order_id')->constrained()->cascadeOnDelete();
@@ -84,7 +75,6 @@ return new class extends Migration
             $table->json('meta')->nullable();
             $table->timestamps();
         });
-
         Schema::create('stripe_webhook_events', function (Blueprint $table) {
             $table->id();
             $table->string('event_id')->unique();
@@ -92,18 +82,15 @@ return new class extends Migration
             $table->timestamp('processed_at')->useCurrent();
         });
     }
-
     public function down(): void
     {
         Schema::dropIfExists('stripe_webhook_events');
         Schema::dropIfExists('payments');
         Schema::dropIfExists('inventory_transactions');
-
         Schema::table('user_vouchers', function (Blueprint $table) {
             $table->dropConstrainedForeignId('reserved_order_id');
             $table->dropColumn(['reservation_status', 'reserved_at']);
         });
-
         Schema::table('orders', function (Blueprint $table) {
             $table->enum('status', ['pending', 'processing', 'shipping', 'delivered', 'cancelled'])
                 ->default('pending');
@@ -120,3 +107,4 @@ return new class extends Migration
         });
     }
 };
+

@@ -1,34 +1,25 @@
 <?php
-
 namespace App\Models;
-
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-
 class Category extends Model
 {
     use SoftDeletes;
     protected $fillable = ['name', 'slug', 'parent_id', 'image', 'sort_order', 'is_featured'];
-
     protected $casts = [
         'is_featured' => 'boolean',
     ];
-
-    //Danh mục con: Một category có nhiều category con.
     public function children()
     {
         return $this->hasMany(Category::class, 'parent_id');
     }
-
-    //Danh mục cha: Một category có một category cha.
     public function parent()
     {
         return $this->belongsTo(Category::class, 'parent_id');
     }
-
-    //Sản phẩm: Một category có nhiều sản phẩm.
     public function products()
     {
         return $this->hasMany(Product::class);
     }
 }
+

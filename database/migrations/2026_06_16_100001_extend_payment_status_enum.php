@@ -1,9 +1,7 @@
 <?php
-
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-
 return new class extends Migration
 {
     public function up(): void
@@ -11,9 +9,7 @@ return new class extends Migration
         if (!Schema::hasColumn('orders', 'payment_status')) {
             return;
         }
-
         $driver = Schema::getConnection()->getDriverName();
-
         if ($driver === 'mysql') {
             DB::statement(
                 "ALTER TABLE orders MODIFY payment_status "
@@ -21,19 +17,15 @@ return new class extends Migration
             );
         }
     }
-
     public function down(): void
     {
         if (!Schema::hasColumn('orders', 'payment_status')) {
             return;
         }
-
         DB::table('orders')
             ->whereIn('payment_status', ['expired', 'refunded'])
             ->update(['payment_status' => 'failed']);
-
         $driver = Schema::getConnection()->getDriverName();
-
         if ($driver === 'mysql') {
             DB::statement(
                 "ALTER TABLE orders MODIFY payment_status "
@@ -42,3 +34,4 @@ return new class extends Migration
         }
     }
 };
+

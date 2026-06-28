@@ -1,10 +1,7 @@
 <?php
-
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
-
-// Ghi nhận voucher đã áp dụng trên đơn hàng
 return new class extends Migration
 {
     public function up(): void
@@ -15,14 +12,11 @@ return new class extends Migration
                 ->after('subtotal')
                 ->constrained('vouchers')
                 ->nullOnDelete();
-
-            // Số tiền được giảm (VNĐ)
             $table->unsignedBigInteger('voucher_discount')
                 ->default(0)
                 ->after('voucher_id');
         });
     }
-
     public function down(): void
     {
         Schema::table('orders', function (Blueprint $table) {
@@ -31,3 +25,4 @@ return new class extends Migration
         });
     }
 };
+

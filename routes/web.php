@@ -1,46 +1,37 @@
 <?php
-
+use App\Http\Controllers\DevProxyController;
 use Illuminate\Support\Facades\Route;
-
-//Tìm user theo id trong link
 use App\Models\User;
-
-// Sự kiện “email vừa được xác minh” (listener khác có thể bắt)
 use Illuminate\Auth\Events\Verified;
-
-//Kiểm tra chữ ký URL, lấy query expires, signature
 use Illuminate\Http\Request;
-
-Route::get('/', function () {
-    return view('welcome');
+Route::get('/mobile-test', function () {
+    return response(
+        "Ket noi thanh cong!\n\nMo tren dien thoai:\nhttp://10.1.0.96:8000\n\n(Nhan http:// o dau URL)",
+        200,
+        ['Content-Type' => 'text/plain; charset=utf-8']
+    );
 });
-
-//get: Chỉ đọc / mở link
 Route::get('/email/verify/{id}/{hash}', function (Request $request, $id, $hash) {
-
-
-    //Lấy URL frontend từ .env
     $frontend = rtrim(config('app.frontend_url', env('FRONTEND_URL', 'http://localhost:5173')), '/');
-
-    
-    // Mail gửi link có thời hạn (mặc định ~60 phút)
     if (! $request->hasValidSignature()) {
-        return redirect($frontend . '/dang-nhap?error=invalid_or_expired_link');
+        return redirect($frontend . '/?error=invalid_or_expired_link');
     }
-
-    //Lấy user theo id trong URL. Không có user → 404.
     $user = User::findOrFail($id);
-
-    //Khi bấm link, so lại: đúng user + đúng email mới cho verify
     if (! hash_equals((string) sha1($user->getEmailForVerification()), (string) $hash)) {
-        return redirect($frontend . '/dang-nhap?error=invalid_hash');
+        return redirect($frontend . '/?error=invalid_hash');
     }
-
-    // Đánh dấu đã verify
     if (! $user->hasVerifiedEmail()) {
         $user->markEmailAsVerified();
         event(new Verified($user));
     }
-
-    return redirect($frontend . '/dang-nhap?verified=1');
+    return redirect($frontend . '/?verified=1');
 })->middleware('signed')->name('verification.verify');
+if (app()->environment('local')) {
+    Route::any('/{path?}', DevProxyController::class)
+        ->where('path', '^(?!email(?:/|$)).*');
+} else {
+    Route::get('/', function () {
+        return view('welcome');
+    });
+}
+

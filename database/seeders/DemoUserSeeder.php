@@ -6,7 +6,7 @@ use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
-// Khách hàng demo — đăng nhập để đặt hàng / xem lịch sử
+
 class DemoUserSeeder extends Seeder
 {
     public function run(): void
@@ -22,3 +22,4 @@ class DemoUserSeeder extends Seeder
         );
     }
 }
+

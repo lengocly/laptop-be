@@ -1,14 +1,11 @@
 <?php
-
 namespace App\Enums;
-
 enum FulfillmentStatus: string
 {
     case Unfulfilled = 'unfulfilled';
     case Processing = 'processing';
     case Shipping = 'shipping';
     case Delivered = 'delivered';
-
     public function label(): string
     {
         return match ($this) {
@@ -19,3 +16,4 @@ enum FulfillmentStatus: string
         };
     }
 }
+

@@ -14,9 +14,14 @@ return [
         'http://127.0.0.1:3000',
         'http://localhost:5174',
         'http://127.0.0.1:5174',
+        'http://10.1.0.96:5173',
+        'http://10.1.0.96:8000',
     ],
 
-    'allowed_origins_patterns' => [],
+    'allowed_origins_patterns' => [
+        '#^http://10\.\d+\.\d+\.\d+(:\d+)?$#',
+        '#^http://192\.168\.\d+\.\d+(:\d+)?$#',
+    ],
 
     'allowed_headers' => ['*'],
 

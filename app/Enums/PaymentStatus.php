@@ -1,7 +1,5 @@
 <?php
-
 namespace App\Enums;
-
 enum PaymentStatus: string
 {
     case Unpaid = 'unpaid';
@@ -10,7 +8,6 @@ enum PaymentStatus: string
     case Refunded = 'refunded';
     case Expired = 'expired';
     case RequiresRefund = 'requires_refund';
-
     public function label(): string
     {
         return match ($this) {
@@ -23,3 +20,4 @@ enum PaymentStatus: string
         };
     }
 }
+

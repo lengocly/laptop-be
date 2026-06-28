@@ -1,17 +1,12 @@
 <?php
-
 namespace App\Http\Controllers\Api;
-
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use App\Models\Product;
 use App\Models\Category;
-
 class ChatController extends Controller
 {
-    // ─── 1. Cấu hình cơ bản ─────────────────────────────────────────
-
     private function suggestions(): array
     {
         return [
@@ -21,7 +16,6 @@ class ChatController extends Controller
             'Chính sách đổi trả',
         ];
     }
-
     private function jsonOk(string $reply, array $products = []): \Illuminate\Http\JsonResponse
     {
         return response()->json([
@@ -30,17 +24,12 @@ class ChatController extends Controller
             'products'    => $products,
         ]);
     }
-
-    // ─── 2. Nhớ tên khách từ lịch sử chat ─────────────────────────────
-
     private function findCustomerName(array $messages): ?string
     {
         foreach ($messages as $msg) {
             if ($msg['role'] !== 'user') {
                 continue;
             }
-
-            // "tôi tên linh" / "tên tôi là Dũng" / "mình tên là Hà"
             if (preg_match('/(?:tôi|toi|mình|minh|em)\s+tên\s+(?:là|la)?\s*([\p{L}]+)/ui', $msg['text'], $m)) {
                 return $this->formatName($m[1]);
             }
@@ -48,22 +37,15 @@ class ChatController extends Controller
                 return $this->formatName($m[1]);
             }
         }
-
         return null;
     }
-
     private function formatName(string $name): string
     {
         return mb_convert_case(trim($name), MB_CASE_TITLE, 'UTF-8');
     }
-
-    // ─── 3. Trả lời nhanh — KHÔNG cần Gemini ─────────────────────────
-
-    /** FAQ: bấm chip hoặc gõ đúng cụm */
     private function faqReply(string $text): ?string
     {
         $t = mb_strtolower(trim($text));
-
         $faqs = [
             'chính sách đổi trả' => 'BetaTech hỗ trợ đổi trả 14 ngày (lỗi NSX) hoặc 30 ngày (tùy sản phẩm). '
                 . 'Hàng còn seal, đủ phụ kiện. Liên hệ hotline trên web để được hướng dẫn ạ.',
@@ -72,28 +54,20 @@ class ChatController extends Controller
             'xem khuyến mãi' => 'Khuyến mãi cập nhật tại trang chủ. '
                 . 'Anh/chị thử bấm "Laptop đi học" hoặc "Tìm laptop gaming" để xem SP ạ.',
         ];
-
         foreach ($faqs as $key => $answer) {
             if (str_contains($t, $key)) {
                 return $answer;
             }
         }
-
         return null;
     }
-
-    /** Chào hỏi / giới thiệu tên */
     private function chatReply(string $text, ?string $name): ?string
     {
         $t = mb_strtolower(trim($text));
-
-        // Vừa nói tên
         if (preg_match('/(?:tôi|toi|mình|minh|em)\s+tên\s+(?:là|la)?\s*([\p{L}]+)/ui', $text, $m)) {
             $n = $this->formatName($m[1]);
             return "Dạ chào {$n}! Rất vui được hỗ trợ. Anh/chị cần tư vấn laptop gaming, đi học hay phụ kiện ạ?";
         }
-
-        // Chào ngắn: "chào e", "xin chào", "hello"
         $greetings = ['chào', 'chao', 'hello', 'hi', 'hey', 'xin chào', 'xin chao'];
         foreach ($greetings as $g) {
             if ($t === $g || str_starts_with($t, $g . ' ') || str_starts_with($t, $g)) {
@@ -104,17 +78,13 @@ class ChatController extends Controller
                 }
             }
         }
-
         return null;
     }
-
-    /** Hỏi lệch chủ đề — shop không bán */
     private function isOffTopic(string $text): bool
     {
         if ($this->wantsProducts($text)) {
             return false;
         }
-
         $t = mb_strtolower(trim($text));
         $offTopic = [
             'quần áo', 'quan ao', 'quần', 'quan', 'váy', 'vay', 'áo khoác', 'thời trang',
@@ -127,23 +97,18 @@ class ChatController extends Controller
             'nhà đất', 'căn hộ', 'can ho', 'vé máy bay', 'du lịch', 'du lich',
             'vàng', 'trang sức', 'trang suc',
         ];
-
         foreach ($offTopic as $kw) {
             if (str_contains($t, $kw)) {
                 return true;
             }
         }
-
         return false;
     }
-
-    /** Trả lời khi hỏi ngoài ngành hàng shop */
     private function offTopicReply(string $text, ?string $name): string
     {
         $t   = mb_strtolower(trim($text));
         $hi  = $name ? " {$name}" : '';
         $ask = 'mặt hàng đó';
-
         if (str_contains($t, 'quần') || str_contains($t, 'áo') || str_contains($t, 'thời trang')) {
             $ask = 'quần áo / thời trang';
         } elseif (str_contains($t, 'giày') || str_contains($t, 'dép')) {
@@ -155,13 +120,10 @@ class ChatController extends Controller
         } elseif (str_contains($t, 'mỹ phẩm') || str_contains($t, 'son')) {
             $ask = 'mỹ phẩm';
         }
-
         return "Dạ chào{$hi}! BetaTech chuyên laptop chính hãng và phụ kiện công nghệ "
             . "(chuột, bàn phím, tai nghe). Shop em chưa bán {$ask} ạ. "
             . "Anh/chị xem gợi ý sản phẩm bên dưới, hoặc bấm \"Laptop đi học\" / \"Tìm laptop gaming\" nhé!";
     }
-
-    /** User hỏi shop bán gì */
     private function isShopQuestion(string $text): bool
     {
         $t = mb_strtolower(trim($text));
@@ -169,36 +131,27 @@ class ChatController extends Controller
             'bán gì', 'ban gi', 'shop bán', 'cửa hàng bán', 'betatech là gì',
             'beta tech là gì', 'shop mình', 'shop em', 'có những gì', 'ngành hàng',
         ];
-
         foreach ($phrases as $p) {
             if (str_contains($t, $p)) {
                 return true;
             }
         }
-
         return false;
     }
-
     private function shopIntroReply(?string $name): string
     {
         $hi = $name ? " {$name}" : '';
-
         return "Dạ chào{$hi}! BetaTech bán laptop chính hãng (ASUS, Dell, MacBook, HP, Lenovo…) "
             . "và phụ kiện: chuột, bàn phím, tai nghe. Giao hàng toàn quốc, đổi trả 14–30 ngày. "
             . "Anh/chị xem sản phẩm nổi bật bên dưới ạ!";
     }
-
     private function featuredProducts(int $limit = 4)
     {
         return Product::where('is_active', true)->inRandomOrder()->limit($limit)->get();
     }
-
-
-    /** Câu user → từ khóa tìm tên SP (cụm dài / phụ kiện ưu tiên trước "đi học") */
     private function searchKeywords(string $text): array
     {
         $t = mb_strtolower(trim($text));
-
         $map = [
             'tìm laptop gaming' => ['gaming', 'razer'],
             'laptop gaming'     => ['gaming', 'razer'],
@@ -213,24 +166,18 @@ class ChatController extends Controller
             'đi học'            => ['vivobook', 'ideapad', 'inspiron', 'pavilion', 'slim'],
             'laptop'            => ['vivobook', 'macbook', 'inspiron', 'ideapad', 'pavilion'],
         ];
-
         $phrases = array_keys($map);
         usort($phrases, fn ($a, $b) => mb_strlen($b) <=> mb_strlen($a));
-
         foreach ($phrases as $phrase) {
             if (str_contains($t, $phrase)) {
                 return $map[$phrase];
             }
         }
-
         return [];
     }
-
-    /** Phụ kiện / laptop — lọc danh mục khi user nói rõ */
     private function detectCategorySlug(string $text): ?string
     {
         $t = mb_strtolower(trim($text));
-
         if (str_contains($t, 'bàn phím') || str_contains($t, 'ban phim')) {
             return 'ban-phim';
         }
@@ -249,11 +196,8 @@ class ChatController extends Controller
         if (str_contains($t, 'macbook')) {
             return 'macbook';
         }
-
         return null;
     }
-
-    /** Lọc SP theo slug danh mục con hoặc cả nhóm laptop */
     private function applyCategoryFilter($query, string $categorySlug): void
     {
         if ($categorySlug === 'laptop-group') {
@@ -263,10 +207,8 @@ class ChatController extends Controller
             }
             return;
         }
-
         $query->whereHas('category', fn ($q) => $q->where('slug', $categorySlug));
     }
-
     private function mentionsAccessory(string $t): bool
     {
         return str_contains($t, 'bàn phím')
@@ -275,41 +217,32 @@ class ChatController extends Controller
             || str_contains($t, 'chuot')
             || str_contains($t, 'tai nghe');
     }
-
-    /** User có đang hỏi về sản phẩm không? */
     private function wantsProducts(string $text): bool
     {
         if ($this->searchKeywords($text) !== []) {
             return true;
         }
-
         $t = mb_strtolower($text);
         $words = [
             'laptop', 'macbook', 'gaming', 'mua', 'tìm', 'giá', 'mẫu', 'gợi ý',
             'phù hợp', 'sản phẩm', 'tư vấn', 'học', 'sinh viên', 'tai nghe', 'chuột',
             'bàn phím', 'ban phim',
         ];
-
         foreach ($words as $w) {
             if (str_contains($t, $w)) {
                 return true;
             }
         }
-
         return (bool) preg_match('/có\s+.+\s+nào/u', $t);
     }
-
     private function findProducts(string $text, int $limit = 4)
     {
         $keys         = $this->searchKeywords($text);
         $categorySlug = $this->detectCategorySlug($text);
-
         $baseQuery = Product::where('is_active', true);
-
         if ($categorySlug) {
             $this->applyCategoryFilter($baseQuery, $categorySlug);
         }
-
         if ($keys !== []) {
             $found = (clone $baseQuery)
                 ->where(function ($q) use ($keys) {
@@ -319,26 +252,21 @@ class ChatController extends Controller
                 })
                 ->limit($limit)
                 ->get();
-
             if ($found->isNotEmpty()) {
                 return ['products' => $found, 'fallback' => false];
             }
         }
-
-        // Có danh mục rõ (vd. bàn phím) nhưng không khớp tên → lấy SP trong danh mục đó
         if ($categorySlug) {
             $byCategory = (clone $baseQuery)->limit($limit)->get();
             if ($byCategory->isNotEmpty()) {
                 return ['products' => $byCategory, 'fallback' => false];
             }
         }
-
         return [
             'products' => Product::where('is_active', true)->inRandomOrder()->limit($limit)->get(),
             'fallback' => true,
         ];
     }
-
     private function toProductJson($products): array
     {
         return $products->map(fn ($p) => [
@@ -348,13 +276,10 @@ class ChatController extends Controller
             'image' => asset('storage/' . $p->image_main),
         ])->values()->all();
     }
-
-    /** Câu trả lời kèm danh sách SP */
     private function productReply(string $text, ?string $name, bool $fallback): string
     {
         $t = mb_strtolower($text);
         $hi  = $name ? " {$name}" : '';
-
         if (str_contains($t, 'bàn phím') || str_contains($t, 'ban phim')) {
             return "Dạ chào{$hi}! Em gợi ý bàn phím gõ êm, phù hợp đi học bên dưới ạ.";
         }
@@ -376,18 +301,12 @@ class ChatController extends Controller
         if ($fallback) {
             return "Dạ chào{$hi}! Em gợi ý thêm vài sản phẩm hot bên dưới ạ.";
         }
-
         return "Dạ chào{$hi}! Em tìm thấy sản phẩm phù hợp bên dưới ạ.";
     }
-
-    // ─── 5. Gemini — chỉ dùng khi câu hỏi phức tạp ───────────────────
-
     private function askGemini(string $apiKey, string $model, array $contents, ?string $name): ?string
     {
         $nameHint = $name ? " Tên khách: {$name}." : '';
-
         try {
-            // API key qua header — không để lộ trên URL/log
             $response = Http::timeout(20)
                 ->withHeaders(['x-goog-api-key' => $apiKey])
                 ->post(
@@ -403,19 +322,13 @@ class ChatController extends Controller
                         'contents' => $contents,
                     ]
                 );
-
             if ($response->successful()) {
                 return $response->json('candidates.0.content.parts.0.text');
             }
         } catch (\Throwable $e) {
-            // bỏ qua — dùng câu local bên dưới
         }
-
         return null;
     }
-
-    // ─── 6. API chính ────────────────────────────────────────────────
-
     public function send(Request $request)
     {
         $validated = $request->validate([
@@ -423,54 +336,38 @@ class ChatController extends Controller
             'messages.*.role'   => 'required|in:user,model',
             'messages.*.text'   => 'required|string|max:2000',
         ]);
-
         $messages     = $validated['messages'];
         $lastUserText = collect($messages)->where('role', 'user')->last()['text'] ?? '';
         $name         = $this->findCustomerName($messages);
-
-        // A) FAQ → trả ngay
         if ($faq = $this->faqReply($lastUserText)) {
             return $this->jsonOk($faq);
         }
-
-        // B) Chào / nói tên → trả ngay
         if ($chat = $this->chatReply($lastUserText, $name)) {
             return $this->jsonOk($chat);
         }
-
-        // C) Hỏi sản phẩm → DB + câu trả lời (không phụ thuộc Gemini)
         if ($this->wantsProducts($lastUserText)) {
             $result   = $this->findProducts($lastUserText);
             $products = $this->toProductJson($result['products']);
             $reply    = $this->productReply($lastUserText, $name, $result['fallback']);
-
             return $this->jsonOk($reply, $products);
         }
-
-        // C2) Hỏi shop bán gì → giới thiệu + SP nổi bật
         if ($this->isShopQuestion($lastUserText)) {
             return $this->jsonOk(
                 $this->shopIntroReply($name),
                 $this->toProductJson($this->featuredProducts())
             );
         }
-
-        // C3) Lệch chủ đề (quần áo, xe, mỹ phẩm…) → giải thích shop + gợi ý SP
         if ($this->isOffTopic($lastUserText)) {
             return $this->jsonOk(
                 $this->offTopicReply($lastUserText, $name),
                 $this->toProductJson($this->featuredProducts())
             );
         }
-
-        // D) Câu khác → thử Gemini, không được thì trả lời gợi ý chip
         $apiKey = config('services.gemini.key');
         $model  = config('services.gemini.model', 'gemini-2.5-flash');
-
         if (!$apiKey) {
             return response()->json(['message' => 'Chưa cấu hình GEMINI_API_KEY'], 500);
         }
-
         $contents = collect($messages)
             ->filter(fn ($msg, $i) => !($i === 0 && $msg['role'] === 'model'))
             ->filter(fn ($msg) => !str_contains($msg['text'], 'Hệ thống đang bận'))
@@ -478,23 +375,18 @@ class ChatController extends Controller
             ->values()
             ->take(-8)
             ->all();
-
         $reply = $this->askGemini($apiKey, $model, $contents, $name);
-
         if (!$reply) {
             $hi = $name ? " {$name}" : '';
-
             if ($this->isOffTopic($lastUserText)) {
                 $reply = $this->offTopicReply($lastUserText, $name);
                 $products = $this->toProductJson($this->featuredProducts());
-
                 return $this->jsonOk($reply, $products);
             }
-
             $reply = "Dạ chào{$hi}! BetaTech chuyên laptop & phụ kiện công nghệ. "
                 . "Anh/chị thử bấm gợi ý bên dưới hoặc gõ \"laptop đi học\", \"laptop gaming\" nhé ạ.";
         }
-
         return $this->jsonOk($reply);
     }
 }
+

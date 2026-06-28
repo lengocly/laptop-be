@@ -1,7 +1,5 @@
 <?php
-
 namespace App\Services;
-
 use App\Enums\PaymentStatus;
 use App\Jobs\ProcessStripeRefundJob;
 use App\Models\Order;
@@ -11,7 +9,6 @@ use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Stripe\Refund;
 use Stripe\Stripe;
-
 class StripeRefundService
 {
     public function process(Payment $payment): void
@@ -19,23 +16,17 @@ class StripeRefundService
         if ($payment->status === PaymentStatus::Refunded->value) {
             return;
         }
-
         if ($payment->status !== PaymentStatus::RequiresRefund->value) {
             return;
         }
-
         $secret = config('services.stripe.secret');
-
         if (!$secret) {
             throw new RuntimeException(
                 "StripeRefundService: Stripe secret missing for payment {$payment->id}"
             );
         }
-
         Stripe::setApiKey($secret);
-
         $existingRefundId = $payment->meta['stripe_refund_id'] ?? null;
-
         $refund = $existingRefundId
             ? Refund::retrieve($existingRefundId)
             : Refund::create([
@@ -47,43 +38,30 @@ class StripeRefundService
             ], [
                 'idempotency_key' => "refund-payment-{$payment->id}",
             ]);
-
         $this->persistRefundResult($payment, $refund);
     }
-
-    /** Webhook charge.refund.updated / refund.updated */
     public function handleRefundWebhook(object $refund): void
     {
         $paymentId = (int) ($refund->metadata->payment_id ?? 0);
-
         if (!$paymentId) {
             return;
         }
-
         $payment = Payment::find($paymentId);
-
         if (!$payment || $payment->status !== PaymentStatus::RequiresRefund->value) {
             return;
         }
-
         $secret = config('services.stripe.secret');
-
         if (!$secret) {
             throw new RuntimeException('StripeRefundService: Stripe secret missing for webhook refund');
         }
-
         Stripe::setApiKey($secret);
         $fresh = Refund::retrieve($refund->id);
-
         $this->persistRefundResult($payment, $fresh);
     }
-
-    /** Đối soát payment requires_refund còn trong giới hạn retry. */
     public function reconcilePending(): int
     {
         $count = 0;
         $maxChecks = (int) config('commerce.refund_pending_max_checks', 24);
-
         Payment::query()
             ->where('status', PaymentStatus::RequiresRefund->value)
             ->where('provider', 'stripe')
@@ -99,35 +77,27 @@ class StripeRefundService
                     $count++;
                 }
             });
-
         return $count;
     }
-
     public function isEligibleForScheduledReconcile(Payment $payment): bool
     {
         if ($payment->status !== PaymentStatus::RequiresRefund->value
             || $payment->provider !== 'stripe') {
             return false;
         }
-
         $maxChecks = (int) config('commerce.refund_pending_max_checks', 24);
         $checkCount = (int) ($payment->meta['refund_check_count'] ?? 0);
-
         return $checkCount < $maxChecks;
     }
-
     public function persistRefundResult(Payment $payment, Refund $refund): void
     {
         $stripeStatus = $refund->status ?? 'unknown';
-
         if ($stripeStatus === 'succeeded') {
             DB::transaction(function () use ($payment, $refund) {
                 $locked = Payment::lockForUpdate()->find($payment->id);
-
                 if (!$locked || $locked->status === PaymentStatus::Refunded->value) {
                     return;
                 }
-
                 $locked->update([
                     'status' => PaymentStatus::Refunded->value,
                     'meta' => array_merge($locked->meta ?? [], [
@@ -136,19 +106,15 @@ class StripeRefundService
                         'refunded_at' => now()->toIso8601String(),
                     ]),
                 ]);
-
                 Order::where('id', $locked->order_id)
                     ->where('payment_status', PaymentStatus::RequiresRefund->value)
                     ->update(['payment_status' => PaymentStatus::Refunded->value]);
             });
-
             return;
         }
-
         if ($stripeStatus === 'pending') {
             $checkCount = (int) ($payment->meta['refund_check_count'] ?? 0) + 1;
             $maxChecks = (int) config('commerce.refund_pending_max_checks', 24);
-
             Payment::where('id', $payment->id)
                 ->where('status', PaymentStatus::RequiresRefund->value)
                 ->update([
@@ -160,13 +126,11 @@ class StripeRefundService
                         'last_refund_check_at' => now()->toIso8601String(),
                     ]),
                 ]);
-
             Log::info('StripeRefundService: refund pending', [
                 'payment_id' => $payment->id,
                 'stripe_refund_id' => $refund->id,
                 'check_count' => $checkCount,
             ]);
-
             if ($checkCount < $maxChecks) {
                 $delayMinutes = (int) config('commerce.refund_reconcile_delay_minutes', 5);
                 ProcessStripeRefundJob::dispatch($payment->id)
@@ -177,10 +141,8 @@ class StripeRefundService
                     'stripe_refund_id' => $refund->id,
                 ]);
             }
-
             return;
         }
-
         Payment::where('id', $payment->id)->update([
             'meta' => array_merge($payment->meta ?? [], [
                 'stripe_refund_id' => $refund->id,
@@ -189,9 +151,9 @@ class StripeRefundService
                 'failure_reason' => $refund->failure_reason ?? null,
             ]),
         ]);
-
         throw new RuntimeException(
             "Stripe refund not succeeded (status={$stripeStatus}) for payment {$payment->id}"
         );
     }
 }
+
