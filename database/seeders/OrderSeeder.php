@@ -104,4 +104,3 @@ class OrderSeeder extends Seeder
         };
     }
 }
-

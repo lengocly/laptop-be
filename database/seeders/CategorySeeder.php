@@ -9,7 +9,7 @@ class CategorySeeder extends Seeder
 {
     public function run(): void
     {
-
+        // ===== Nhóm cha: Laptop (chỉ nhóm, SP gắn vào danh mục con = hãng) =====
         $laptopGroup = Category::create([
             'name' => 'Laptop',
             'slug' => 'laptop-group',
@@ -18,7 +18,7 @@ class CategorySeeder extends Seeder
             'sort_order' => 1,
         ]);
 
-
+        // Danh mục con = hãng laptop — slug dùng lọc ?category=asus
         $laptopBrands = [
             ['name' => 'ASUS', 'slug' => 'asus', 'image' => 'products/asus1.jpg'],
             ['name' => 'Dell', 'slug' => 'dell', 'image' => 'products/dell1.jpg'],
@@ -37,7 +37,7 @@ class CategorySeeder extends Seeder
             ]);
         }
 
-
+        // ===== Nhóm cha: Phụ kiện =====
         $phuKien = Category::create([
             'name' => 'Phụ kiện',
             'slug' => 'phu-kien',
@@ -63,4 +63,3 @@ class CategorySeeder extends Seeder
         }
     }
 }
-

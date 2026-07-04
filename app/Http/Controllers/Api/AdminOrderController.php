@@ -1,5 +1,7 @@
 <?php
+
 namespace App\Http\Controllers\Api;
+
 use App\Enums\FulfillmentStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentStatus;
@@ -13,26 +15,35 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use InvalidArgumentException;
+
 class AdminOrderController extends Controller
 {
+    //khởi tạo services
     public function __construct(
         private OrderCancellationService $cancellationService,
         private OrderStateMachine $stateMachine,
         private PaymentService $paymentService,
     ) {}
+
+    //lấy danh sách đơn hàng
     public function index()
     {
         $orders = Order::with(['items', 'user:id,name,email'])
             ->latest()
             ->get();
+
         return response()->json($orders);
     }
+
+    //cập nhật trạng thái đơn hàng
     public function updateStatus(Request $request, Order $order)
     {
         $validated = $request->validate([
             'status' => ['required', 'in:pending,processing,shipping,delivered,cancelled'],
             'note' => ['nullable', 'string', 'max:500'],
         ]);
+
+        //nếu đơn hàng đã hủy, hủy đơn hàng
         if ($validated['status'] === 'cancelled') {
             try {
                 $cancelled = $this->cancellationService->cancel(
@@ -42,11 +53,14 @@ class AdminOrderController extends Controller
             } catch (InvalidArgumentException $e) {
                 return response()->json(['message' => $e->getMessage()], 422);
             }
+
             return response()->json([
                 'message' => 'Cập nhật trạng thái đơn hàng thành công',
                 'order' => $cancelled->load(['items', 'user:id,name,email']),
             ]);
         }
+
+        //xác định trạng thái đơn hàng
         $target = match ($validated['status']) {
             'pending' => FulfillmentStatus::Unfulfilled,
             'processing' => FulfillmentStatus::Processing,
@@ -54,13 +68,18 @@ class AdminOrderController extends Controller
             'delivered' => FulfillmentStatus::Delivered,
             default => null,
         };
+
         try {
+            //cập nhật trạng thái đơn hàng
             $updated = DB::transaction(function () use ($order, $target, $validated) {
                 $fresh = Order::lockForUpdate()->findOrFail($order->id);
+
                 if ($fresh->order_status === OrderStatus::Cancelled->value) {
                     throw new InvalidArgumentException('Đơn hàng đã hủy.');
                 }
+
                 $this->stateMachine->assertFulfillmentTransition($fresh, $target);
+
                 if (
                     $target === FulfillmentStatus::Delivered
                     && $fresh->payment_method === 'cod'
@@ -69,54 +88,69 @@ class AdminOrderController extends Controller
                     $this->paymentService->applyCodPaid($fresh, 'admin_delivered');
                     $fresh->refresh();
                 }
+
                 $data = ['fulfillment_status' => $target->value];
+
                 if (!empty($validated['note'])) {
                     $data['admin_note'] = $validated['note'];
                 }
+
                 $fresh->update($data);
+
                 return $fresh->fresh()->load(['items', 'user:id,name,email']);
             });
         } catch (InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
+
         return response()->json([
             'message' => 'Cập nhật trạng thái đơn hàng thành công',
             'order' => $updated,
         ]);
     }
+
     public function show(Order $order)
     {
         return response()->json(
             $order->load(['items', 'user:id,name,email', 'payments'])
         );
     }
+
     public function cancel(Order $order)
     {
         if ($order->order_status === OrderStatus::Cancelled->value) {
             return response()->json(['message' => 'Đơn đã hủy.'], 422);
         }
+
         if ($order->fulfillment_status === FulfillmentStatus::Delivered->value) {
             return response()->json(['message' => 'Không thể hủy đơn đã giao.'], 422);
         }
+
         try {
             $cancelled = $this->cancellationService->cancel($order);
         } catch (InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
+
         return response()->json([
             'message' => 'Đã hủy đơn hàng.',
             'order' => $cancelled->load(['items', 'user:id,name,email']),
         ]);
     }
+
     public function sendInvoice(Order $order)
     {
         $order->load(['items', 'user']);
+
         if (!$order->user?->email) {
             return response()->json(['message' => 'Khách không có email.'], 422);
         }
+
         Mail::to($order->user->email)->send(new OrderInvoiceMail($order));
+
         return response()->json(['message' => 'Hóa đơn đã được gửi qua email!']);
     }
+
     public function stats()
     {
         return response()->json([
@@ -127,16 +161,18 @@ class AdminOrderController extends Controller
             'revenue' => Order::where('payment_status', PaymentStatus::Paid->value)->sum('subtotal'),
         ]);
     }
+
     public function revenueByDay(Request $request)
     {
         $days = min((int) $request->get('days', 7), 90);
+
         $rows = Order::where('payment_status', PaymentStatus::Paid->value)
             ->where('created_at', '>=', now()->subDays($days - 1)->startOfDay())
             ->selectRaw('DATE(created_at) as date, SUM(subtotal) as total')
             ->groupBy('date')
             ->orderBy('date')
             ->get();
+
         return response()->json(['days' => $days, 'data' => $rows]);
     }
 }
-

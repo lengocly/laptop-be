@@ -1,10 +1,13 @@
 <?php
+
 namespace App\Enums;
+
 enum OrderStatus: string
 {
     case PendingPayment = 'pending_payment';
     case Confirmed = 'confirmed';
     case Cancelled = 'cancelled';
+
     public function label(): string
     {
         return match ($this) {
@@ -14,4 +17,3 @@ enum OrderStatus: string
         };
     }
 }
-

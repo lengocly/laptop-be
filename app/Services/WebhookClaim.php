@@ -1,6 +1,9 @@
 <?php
+
 namespace App\Services;
+
 use App\Models\StripeWebhookEvent;
+
 class WebhookClaim
 {
     public function __construct(
@@ -8,4 +11,3 @@ class WebhookClaim
         public string $owner,
     ) {}
 }
-

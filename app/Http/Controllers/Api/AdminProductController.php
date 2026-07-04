@@ -1,59 +1,82 @@
 <?php
+
 namespace App\Http\Controllers\Api;
+
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+
 class AdminProductController extends Controller
 {
+    // Danh sách sản phẩm cho admin
     public function index(Request $request)
     {
         $query = Product::with([
             'category:id,name,slug',
             'allVariants'
         ]);
+
+        //tìm kiếm sản phẩm
         if ($request->filled('keyword')) {
             $kw = '%' . $request->keyword . '%';
+
+            //tìm kiếm theo tên hoặc slug
             $query->where(function ($q) use ($kw) {
                 $q->where('name', 'like', $kw)
                     ->orWhere('slug', 'like', $kw);
             });
         }
+
+        //lọc sản phẩm theo danh mục
         if ($request->filled('category_id')) {
             $query->where('category_id', $request->category_id);
         }
+
+        //lọc sản phẩm theo trạng thái
         if ($request->filled('is_active')) {
             $query->where('is_active', $request->boolean('is_active'));
         }
+
+        // Phân trang — mặc định 10 SP/trang, tối đa 50
         $perPage = min(max((int) $request->input('per_page', 10), 1), 50);
+
         return response()->json(
             $query->latest()->paginate($perPage)
         );
     }
+
+    // Chi tiết sản phẩm để sửa
     public function show(Product $product)
     {
         return response()->json(
             $product->load(['category', 'allVariants'])
         );
     }
+
+    // Thêm sản phẩm
     public function store(Request $request)
     {
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'slug' => ['nullable', 'string', 'max:255', 'unique:products,slug'],
             'category_id' => ['nullable', 'exists:categories,id'],
+
             'price_display' => ['required', 'string', 'max:50'],
             'price_original' => ['nullable', 'string', 'max:50'],
             'stock' => ['nullable', 'integer', 'min:0'],
+
             'cpu' => ['nullable', 'string', 'max:255'],
             'ram' => ['nullable', 'string', 'max:255'],
             'storage' => ['nullable', 'string', 'max:255'],
             'screen' => ['nullable', 'string', 'max:255'],
+
             'image_main' => ['required', 'string', 'max:2048'],
             'image_hover' => ['nullable', 'string', 'max:2048'],
             'is_active' => ['boolean'],
+
             'variants' => ['nullable', 'array'],
             'variants.*.id' => ['nullable', 'integer'],
             'variants.*.group_key' => ['required_with:variants', 'string', 'max:100'],
@@ -66,14 +89,24 @@ class AdminProductController extends Controller
             'variants.*.sort_order' => ['nullable', 'integer', 'min:0'],
             'variants.*.is_active' => ['boolean'],
         ]);
+
+        //thêm sản phẩm vào database và biến thể sản phẩm cùng lúc
         $product = DB::transaction(function () use ($validated) {
             $data = collect($validated)->except('variants')->toArray();
+
+            //nếu slug không có thì tạo slug từ tên sản phẩm
             if (empty($data['slug'])) {
                 $data['slug'] = Str::slug($validated['name']);
             }
+            
+             //nếu stock không có thì đặt giá trị mặc định là 0
              $data['stock'] = $data['stock'] ?? 0;
              $data['is_active'] = $data['is_active'] ?? true;
+
+              //tạo sản phẩm vào database
               $product = Product::create($data);
+
+            //tạo biến thể sản phẩm vào database
             foreach ($validated['variants'] ?? [] as $i => $variant) {
                 $product->allVariants()->create([
                     'group_key' => $variant['group_key'],
@@ -87,15 +120,21 @@ class AdminProductController extends Controller
                     'is_active' => $variant['is_active'] ?? true,
                 ]);
             }
+
             return $product;
         });
+
+        //trả về sản phẩm và biến thể sản phẩm
         return response()->json(
             $product->load(['category', 'allVariants']),
             201
         );
     }
+
+    // Cập nhật sản phẩm
     public function update(Request $request, Product $product)
     {
+        //kiểm tra dữ liệu đầu vào
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'slug' => [
@@ -105,16 +144,20 @@ class AdminProductController extends Controller
                 Rule::unique('products', 'slug')->ignore($product->id),
             ],
             'category_id' => ['nullable', 'exists:categories,id'],
+
             'price_display' => ['required', 'string', 'max:50'],
             'price_original' => ['nullable', 'string', 'max:50'],
             'stock' => ['nullable', 'integer', 'min:0'],
+
             'cpu' => ['nullable', 'string', 'max:255'],
             'ram' => ['nullable', 'string', 'max:255'],
             'storage' => ['nullable', 'string', 'max:255'],
             'screen' => ['nullable', 'string', 'max:255'],
+
             'image_main' => ['required', 'string', 'max:2048'],
             'image_hover' => ['nullable', 'string', 'max:2048'],
             'is_active' => ['boolean'],
+
             'variants' => ['nullable', 'array'],
             'variants.*.id' => ['nullable', 'integer'],
             'variants.*.group_key' => ['required_with:variants', 'string', 'max:100'],
@@ -127,33 +170,52 @@ class AdminProductController extends Controller
             'variants.*.sort_order' => ['nullable', 'integer', 'min:0'],
             'variants.*.is_active' => ['boolean'],
         ]);
+
+        //cập nhật sản phẩm và biến thể sản phẩm cùng lúc
         DB::transaction(function () use ($validated, $product) {
             $data = collect($validated)->except('variants')->toArray();
+
+            //nếu slug không có thì tạo slug từ tên sản phẩm
             if (empty($data['slug'])) {
                 $data['slug'] = Str::slug($validated['name']);
             }
+
+            //nếu stock không có thì đặt giá trị mặc định là 0
             $data['stock'] = $data['stock'] ?? 0;
             $data['is_active'] = $data['is_active'] ?? true;
+
+            //cập nhật sản phẩm vào database
             $product->update($data);
+
+            // Đồng bộ biến thể — update/upsert, không xóa rồi tạo lại
             $this->syncVariants($product, $validated['variants'] ?? []);
         });
+
         return response()->json(
             $product->load(['category', 'allVariants'])
         );
     }
+
+    // Xóa sản phẩm
     public function destroy(Product $product)
     {
+        //xóa biến thể sản phẩm và sản phẩm
         DB::transaction(function () use ($product) {
             $product->allVariants()->delete();
             $product->delete();
         });
+
+        //trả về thông báo xóa sản phẩm thành công
         return response()->json([
             'message' => 'Đã xóa sản phẩm'
         ]);
     }
+
+    /** Update hoặc tạo variant; soft-delete variant không còn trong payload. */
     private function syncVariants(Product $product, array $variants): void
     {
         $keepIds = [];
+
         foreach ($variants as $i => $variant) {
             $payload = [
                 'group_key' => $variant['group_key'],
@@ -166,6 +228,7 @@ class AdminProductController extends Controller
                 'sort_order' => $variant['sort_order'] ?? $i,
                 'is_active' => $variant['is_active'] ?? true,
             ];
+
             if (!empty($variant['id'])) {
                 $existing = $product->allVariants()->withTrashed()->find($variant['id']);
                 if ($existing) {
@@ -177,22 +240,29 @@ class AdminProductController extends Controller
                     continue;
                 }
             }
+
             $created = $product->allVariants()->create($payload);
             $keepIds[] = $created->id;
         }
+
         $product->allVariants()
             ->whereNotIn('id', $keepIds)
             ->get()
             ->each(fn ($v) => $v->delete());
     }
+
+    // Upload ảnh sản phẩm
     public function uploadImage(Request $request)
     {
         $request->validate([
-            'image' => ['required', 'file', 'mimes:jpeg,png,webp,jpg', 'max:5120'],
+            'image' => ['required', 'file', 'mimes:jpeg,png,webp,jpg', 'max:5120'], // tối đa ~5MB
         ]);
+
+        // Lưu vào storage/app/public/products/
         $path = $request->file('image')->store('products', 'public');
+
         return response()->json([
-            'path' => $path,
+            'path' => $path, // vd: products/xyz.jpg
             'url' => asset('storage/' . $path),
         ]);
     }

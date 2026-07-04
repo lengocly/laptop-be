@@ -1,10 +1,14 @@
 <?php
+
 namespace App\Models;
+
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
 class InventoryTransaction extends Model
 {
     public $timestamps = false;
+
     protected $fillable = [
         'product_id',
         'product_variant_id',
@@ -15,6 +19,7 @@ class InventoryTransaction extends Model
         'meta',
         'created_at',
     ];
+
     protected function casts(): array
     {
         return [
@@ -22,17 +27,19 @@ class InventoryTransaction extends Model
             'created_at' => 'datetime',
         ];
     }
+
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
     }
+
     public function variant(): BelongsTo
     {
         return $this->belongsTo(ProductVariant::class, 'product_variant_id');
     }
+
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
     }
 }
-

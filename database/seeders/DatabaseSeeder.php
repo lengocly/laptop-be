@@ -19,14 +19,13 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call([
-            AdminUserSeeder::class,
-            CategorySeeder::class,
-            ProductSeeder::class,
-            ProductVariantSeeder::class,
-            VoucherSeeder::class,
-            DemoUserSeeder::class,
-            OrderSeeder::class,
+            AdminUserSeeder::class,      // admin@betatech.com
+            CategorySeeder::class,       // Laptop (hãng) + Phụ kiện
+            ProductSeeder::class,        // Sản phẩm mẫu
+            ProductVariantSeeder::class, // Biến thể (màu tai nghe, cấu hình MacBook...)
+            VoucherSeeder::class,        // Mã giảm giá demo
+            DemoUserSeeder::class,       // khach@betatech.com
+            OrderSeeder::class,          // Đơn hàng mẫu cho dashboard
         ]);
     }
 }
-

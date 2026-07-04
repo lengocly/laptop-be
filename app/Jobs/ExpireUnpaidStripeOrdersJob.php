@@ -1,13 +1,17 @@
 <?php
+
 namespace App\Jobs;
+
 use App\Models\Order;
 use App\Services\OrderCancellationService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
+
 class ExpireUnpaidStripeOrdersJob implements ShouldQueue
 {
     use Queueable;
+
     public function handle(OrderCancellationService $cancellationService): void
     {
         Order::query()
@@ -32,4 +36,3 @@ class ExpireUnpaidStripeOrdersJob implements ShouldQueue
             });
     }
 }
-

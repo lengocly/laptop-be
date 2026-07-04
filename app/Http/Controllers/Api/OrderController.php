@@ -1,5 +1,7 @@
 <?php
+
 namespace App\Http\Controllers\Api;
+
 use App\Enums\FulfillmentStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentStatus;
@@ -16,6 +18,7 @@ use App\Support\PriceHelper;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+
 class OrderController extends Controller
 {
     public function __construct(
@@ -25,6 +28,8 @@ class OrderController extends Controller
         private OrderStateMachine $stateMachine,
         private GhnShippingService $ghnShippingService,
     ) {}
+
+    // đặt hàng
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -45,33 +50,45 @@ class OrderController extends Controller
             'items.*.price' => ['required', 'integer', 'min:0'],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
         ]);
+
         $order = DB::transaction(function () use ($request, $validated) {
             foreach ($validated['items'] as &$item) {
                 $item['price'] = $this->resolveUnitPrice($item);
             }
             unset($item);
+
+            //gộp thành 1 dòng và cộng số lượng
             $validated['items'] = InventoryService::aggregateLineItems($validated['items']);
+
             $itemsSubtotal = 0;
             foreach ($validated['items'] as $item) {
                 $itemsSubtotal += $item['price'] * $item['quantity'];
             }
+
+            //Xử lý voucher
             $voucherResult = $this->voucherService->resolveForCheckout(
                 $request->user()->id,
                 $itemsSubtotal,
                 $validated['voucher_id'] ?? null,
                 $validated['voucher_code'] ?? null,
             );
+
             $voucher = $voucherResult['voucher'];
             $userVoucher = $voucherResult['user_voucher'];
             $voucherDiscount = $voucherResult['discount'];
+
+            //Tính phí ship
             $shippingFee = $this->resolveShippingFee(
                 $validated['to_district_id'],
                 $validated['to_ward_code'],
                 $validated['items'],
                 $itemsSubtotal,
             );
+
             $finalTotal = $itemsSubtotal - $voucherDiscount + $shippingFee;
             $isStripe = $validated['payment_method'] === 'stripe';
+
+            //tạo đơn hàng 
             $order = Order::create([
                 'user_id' => $request->user()->id,
                 'order_status' => $isStripe
@@ -93,9 +110,10 @@ class OrderController extends Controller
                 'payment_method' => $validated['payment_method'],
                 'payment_status' => PaymentStatus::Unpaid->value,
                 'expires_at' => $isStripe
-                    ? now()->addMinutes(config('commerce.stripe_order_expire_minutes', 30))
+                    ? now()->addMinutes(config('commerce.stripe_order_expire_minutes', 5))
                     : null,
             ]);
+
             foreach ($validated['items'] as $item) {
                 $unitPrice = $item['price'];
                 $order->items()->create([
@@ -108,12 +126,18 @@ class OrderController extends Controller
                     'line_total' => $unitPrice * $item['quantity'],
                 ]);
             }
+
+            //Giữ tồn kho
             $this->inventoryService->reserveForOrder($order, $validated['items']);
+
+            //Nếu có dùng voucher thì đánh dấu voucher đã được giữ cho đơn này.
             if ($voucher && $userVoucher) {
                 $this->voucherService->reserveForOrder($order, $userVoucher);
             }
+
             return $order;
         });
+
         return response()->json([
             'order_id' => $order->id,
             'order_code' => $order->order_code,
@@ -129,6 +153,7 @@ class OrderController extends Controller
             'message' => 'Đặt hàng thành công',
         ], 201);
     }
+
     public function index(Request $request)
     {
         $orders = Order::where('user_id', $request->user()->id)
@@ -153,69 +178,91 @@ class OrderController extends Controller
                 'expires_at',
                 'created_at',
             ]);
+
         return response()->json($orders);
     }
+
     public function cancel(Request $request, Order $order)
     {
         if ($order->user_id !== $request->user()->id) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
+
         try {
             $cancelled = $this->cancellationService->cancelByCustomer($order);
         } catch (\InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
+
         return response()->json([
             'message' => 'Đã hủy đơn hàng thành công.',
             'order' => $cancelled->load('items'),
         ]);
     }
+
+    //tạo mã đơn hàng
     private function generateOrderCode(): string
     {
         $prefix = 'ORD-' . now()->format('ym') . '-';
+
         for ($attempt = 0; $attempt < 5; $attempt++) {
             $sequence = Order::whereYear('created_at', now()->year)
                 ->whereMonth('created_at', now()->month)
                 ->lockForUpdate()
                 ->count() + 1 + $attempt;
+
             $code = $prefix . str_pad((string) $sequence, 5, '0', STR_PAD_LEFT);
+
             if (!Order::where('order_code', $code)->exists()) {
                 return $code;
             }
         }
+
         return $prefix . strtoupper(substr(uniqid(), -5));
     }
+
+    //Kiểm tra lại giá sản phẩm từ database trước khi tạo đơn.
     private function resolveUnitPrice(array $item): int
     {
         $product = Product::find($item['product_id']);
+
         if (!$product || !$product->is_active) {
             $this->failStock('Sản phẩm "' . $item['product_name'] . '" không còn khả dụng.');
         }
+
         $hasVariants = $product->variants()->exists();
         $variantId = $item['product_variant_id'] ?? null;
+
         if ($hasVariants && !$variantId) {
             $this->failStock('Vui lòng chọn cấu hình cho sản phẩm "' . $item['product_name'] . '".');
         }
+
         if ($variantId) {
             $variant = ProductVariant::where('product_id', $product->id)
                 ->where('id', $variantId)
                 ->where('is_active', true)
                 ->first();
+
             if (!$variant) {
                 $this->failStock('Biến thể sản phẩm không hợp lệ hoặc đã ngừng bán.');
             }
+
             $expected = PriceHelper::parseDisplay($variant->price_display ?? $product->price_display);
         } else {
             $expected = PriceHelper::parseDisplay($product->price_display);
         }
+
         if ($expected <= 0) {
             $this->failStock('Không xác định được giá sản phẩm "' . $item['product_name'] . '".');
         }
+
         if ((int) $item['price'] !== $expected) {
             $this->failStock('Giá sản phẩm "' . $item['product_name'] . '" đã thay đổi. Vui lòng tải lại trang.');
         }
+
         return $expected;
     }
+
     private function resolveShippingFee(
         int $toDistrictId,
         string $toWardCode,
@@ -225,6 +272,7 @@ class OrderController extends Controller
         if ($itemsSubtotal >= config('commerce.free_shipping_threshold', 10_000_000)) {
             return 0;
         }
+
         try {
             return $this->ghnShippingService->calculateFee(
                 $toDistrictId,
@@ -236,17 +284,19 @@ class OrderController extends Controller
             $this->failStock('Không tính được phí vận chuyển: ' . $e->getMessage());
         }
     }
+
     private function estimateCartWeightGram(array $items): int
     {
         $gram = 0;
         foreach ($items as $item) {
             $gram += 1500 * $item['quantity'];
         }
+
         return max($gram, (int) config('ghn.default_weight', 1500));
     }
+
     private function failStock(string $message): void
     {
         throw new HttpResponseException(response()->json(['message' => $message], 422));
     }
 }
-

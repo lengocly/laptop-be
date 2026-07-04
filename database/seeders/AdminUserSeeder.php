@@ -12,7 +12,7 @@ class AdminUserSeeder extends Seeder
 {
     public function run(): void
     {
-
+        // Tạo hoặc cập nhật user admin với email admin@betatech.com
         User::updateOrCreate(
             ['email' => 'admin@betatech.com'],
             [
@@ -24,4 +24,3 @@ class AdminUserSeeder extends Seeder
         );
     }
 }
-

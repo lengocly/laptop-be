@@ -6,7 +6,7 @@ use App\Models\User;
 use App\Models\Voucher;
 use Illuminate\Database\Seeder;
 
-
+// Mẫu voucher demo — chạy: php artisan db:seed --class=VoucherSeeder
 class VoucherSeeder extends Seeder
 {
     public function run(): void
@@ -63,4 +63,3 @@ class VoucherSeeder extends Seeder
         }
     }
 }
-

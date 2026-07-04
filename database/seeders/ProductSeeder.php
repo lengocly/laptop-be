@@ -10,7 +10,7 @@ class ProductSeeder extends Seeder
 {
     public function run(): void
     {
-
+        // Danh mục con = hãng / loại phụ kiện (không còn slug "laptop" chung)
         $asus    = Category::where('slug', 'asus')->first();
         $dell    = Category::where('slug', 'dell')->first();
         $macbook = Category::where('slug', 'macbook')->first();
@@ -20,7 +20,7 @@ class ProductSeeder extends Seeder
         $banPhim = Category::where('slug', 'ban-phim')->first();
         $taiNghe = Category::where('slug', 'tai-nghe')->first();
 
-
+        // ========== LAPTOP THEO HÃNG ==========
         Product::create([
             'name' => 'ASUS Vivobook 15',
             'slug' => 'asus-vivobook-15',
@@ -101,7 +101,7 @@ class ProductSeeder extends Seeder
             'category_id' => $hp->id,
         ]);
 
-
+        // Thêm vài laptop mẫu cùng hãng (ảnh tạm có sẵn)
         Product::create([
             'name' => 'ASUS TUF Gaming A15',
             'slug' => 'asus-tuf-gaming-a15',
@@ -134,7 +134,7 @@ class ProductSeeder extends Seeder
             'category_id' => $dell->id,
         ]);
 
-
+        // ========== CHUỘT ==========
         Product::create([
             'name' => 'Chuột Logitech G102',
             'slug' => 'chuot-logitech-g102',
@@ -159,7 +159,7 @@ class ProductSeeder extends Seeder
             'category_id' => $chuot->id,
         ]);
 
-
+        // ========== BÀN PHÍM ==========
         Product::create([
             'name' => 'Bàn phím Keychron K2',
             'slug' => 'ban-phim-keychron-k2',
@@ -184,7 +184,7 @@ class ProductSeeder extends Seeder
             'category_id' => $banPhim->id,
         ]);
 
-
+        // ========== TAI NGHE ==========
         Product::create([
             'name' => 'Tai nghe Sony WH-CH520',
             'slug' => 'tai-nghe-sony-ch520',
@@ -210,4 +210,3 @@ class ProductSeeder extends Seeder
         ]);
     }
 }
-

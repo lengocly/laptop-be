@@ -1,5 +1,7 @@
 <?php
+
 namespace App\Enums;
+
 enum InventoryTransactionType: string
 {
     case Reserve = 'reserve';
@@ -7,4 +9,3 @@ enum InventoryTransactionType: string
     case Sale = 'sale';
     case Restock = 'restock';
 }
-

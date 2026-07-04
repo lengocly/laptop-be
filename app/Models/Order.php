@@ -1,9 +1,12 @@
 <?php
+
 namespace App\Models;
+
 use App\Services\OrderStateMachine;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+
 class Order extends Model
 {
     protected $fillable = [
@@ -31,7 +34,9 @@ class Order extends Model
         'inventory_released_at',
         'voucher_released_at',
     ];
+
     protected $appends = ['status'];
+
     protected function casts(): array
     {
         return [
@@ -40,29 +45,40 @@ class Order extends Model
             'voucher_released_at' => 'datetime',
         ];
     }
+
+    /** Trạng thái legacy cho frontend. */
     public function getStatusAttribute(): string
     {
         return app(OrderStateMachine::class)->legacyStatus($this);
     }
+
+    //Một đơn hàng có nhiều sản phẩm trong đơn.
     public function items(): HasMany
     {
         return $this->hasMany(OrderItem::class);
     }
+
+    //
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
+
+    //Một đơn hàng có thể có voucher
     public function voucher(): BelongsTo
     {
         return $this->belongsTo(Voucher::class);
     }
+
+    //Một đơn hàng có thể có nhiều giao dịch thanh toán
     public function payments(): HasMany
     {
         return $this->hasMany(Payment::class);
     }
+
+    //Một đơn hàng có thể có nhiều giao dịch tồn kho
     public function inventoryTransactions(): HasMany
     {
         return $this->hasMany(InventoryTransaction::class);
     }
 }
-
